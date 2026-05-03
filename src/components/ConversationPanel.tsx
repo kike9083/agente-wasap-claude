@@ -5,17 +5,21 @@ import { MessageBubble } from "./MessageBubble";
 import { ModeToggle } from "./ModeToggle";
 
 interface Message {
-  id: number;
+  id: string;
   role: "user" | "assistant" | "human";
   content: string;
   created_at: number;
 }
 
 interface Conversation {
-  id: number;
+  id: string;
   phone: string;
   name: string | null;
   mode: "AI" | "HUMAN";
+}
+
+function formatPhone(phone: string): string {
+  return phone.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, "");
 }
 
 interface ConversationPanelProps {
@@ -70,7 +74,7 @@ export function ConversationPanel({
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`¿Borrar conversación con ${conversation.name || conversation.phone}?`)) {
+    if (!window.confirm(`¿Borrar conversación con ${conversation.name || formatPhone(conversation.phone)}?`)) {
       return;
     }
     setDeleteLoading(true);
@@ -82,13 +86,13 @@ export function ConversationPanel({
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex flex-col h-full bg-white">
       <div className="border-b border-gray-200 p-4 flex items-center justify-between">
         <div className="flex-1">
           <h2 className="font-semibold text-gray-900">
             {conversation.name || conversation.phone}
           </h2>
-          <p className="text-xs text-gray-500">{conversation.phone}</p>
+          <p className="text-xs text-gray-500">{formatPhone(conversation.phone)}</p>
         </div>
         <div className="flex items-center gap-3">
           <ModeToggle
@@ -97,6 +101,7 @@ export function ConversationPanel({
             loading={modeLoading}
           />
           <button
+            type="button"
             onClick={handleDelete}
             disabled={deleteLoading || loading}
             className="px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -144,6 +149,7 @@ export function ConversationPanel({
               className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
             <button
+              type="button"
               onClick={handleSend}
               disabled={sendLoading || loading || !input.trim()}
               className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed"

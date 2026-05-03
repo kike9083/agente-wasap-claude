@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
     "@whiskeysockets/baileys",
     "better-sqlite3",
     "pino",
+    "node-appwrite",
   ],
 };
 

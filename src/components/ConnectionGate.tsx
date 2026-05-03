@@ -7,7 +7,7 @@ import { ConversationList } from "./ConversationList";
 import { ConversationPanel } from "./ConversationPanel";
 
 interface Conversation {
-  id: number;
+  id: string;
   phone: string;
   name: string | null;
   mode: "AI" | "HUMAN";
@@ -16,7 +16,7 @@ interface Conversation {
 }
 
 interface Message {
-  id: number;
+  id: string;
   role: "user" | "assistant" | "human";
   content: string;
   created_at: number;
@@ -34,7 +34,7 @@ export function ConnectionGate() {
     status: "disconnected",
   });
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedConvId, setSelectedConvId] = useState<number | undefined>();
+  const [selectedConvId, setSelectedConvId] = useState<string | undefined>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
 

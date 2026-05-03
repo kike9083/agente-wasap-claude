@@ -6,6 +6,7 @@ import {
   WASocket,
 } from "@whiskeysockets/baileys";
 import { setConnectionState, getConnectionState } from "../db";
+import handleMessage from "./handler";
 import pino from "pino";
 
 const logger = pino({ level: "silent" });
@@ -17,7 +18,21 @@ export interface BaileysHandle {
 
 let reconnectTimer: NodeJS.Timeout | null = null;
 
-async function createSocket(authPath: string): Promise<BaileysHandle> {
+// Mapeo LID → JID real (@s.whatsapp.net) que se llena con contacts.upsert
+const lidToJid = new Map<string, string>();
+
+/** Convierte un JID @lid al JID real si está disponible, si no devuelve el original */
+export function resolveJid(jid: string): string {
+  if (jid.endsWith("@lid")) {
+    return lidToJid.get(jid) ?? jid;
+  }
+  return jid;
+}
+
+async function createSocket(
+  authPath: string,
+  onReconnect: (delay: number) => void
+): Promise<BaileysHandle> {
   let version: [number, number, number] | undefined;
   try {
     const fetched = await fetchLatestBaileysVersion();
@@ -28,7 +43,6 @@ async function createSocket(authPath: string): Promise<BaileysHandle> {
   }
 
   const { useMultiFileAuthState } = await import("@whiskeysockets/baileys");
-
   const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
   const sock = makeWASocket({
@@ -42,6 +56,17 @@ async function createSocket(authPath: string): Promise<BaileysHandle> {
 
   sock.ev.on("creds.update", saveCreds);
 
+  // Construir mapa LID → JID cuando WhatsApp sincroniza contactos
+  const mapContact = (c: any) => {
+    if (c.lid && c.id) {
+      lidToJid.set(c.lid, c.id);
+      console.log(`[bot] Contacto mapeado: ${c.lid} → ${c.id}`);
+    }
+  };
+
+  sock.ev.on("contacts.upsert", (contacts: any[]) => contacts.forEach(mapContact));
+  sock.ev.on("contacts.update", (contacts: any[]) => contacts.forEach(mapContact));
+
   sock.ev.on("connection.update", async (update: any) => {
     const { connection, lastDisconnectReason, qr } = update;
 
@@ -51,11 +76,12 @@ async function createSocket(authPath: string): Promise<BaileysHandle> {
     }
 
     if (connection === "connecting") {
-      const current = getConnectionState();
-      if (current.status === "disconnected") {
-        console.log("[bot] Conectando...");
-        setConnectionState({ status: "connecting" });
-      }
+      getConnectionState().then((current) => {
+        if (current.status === "disconnected") {
+          console.log("[bot] Conectando...");
+          setConnectionState({ status: "connecting" });
+        }
+      });
     }
 
     if (connection === "open") {
@@ -83,39 +109,36 @@ async function createSocket(authPath: string): Promise<BaileysHandle> {
       }
 
       const delay = code === 440 ? 15000 : 5000;
-      scheduleReconnect(delay);
+      scheduleReconnect(delay, onReconnect);
     }
   });
 
   sock.ev.on("messages.upsert", async (m: any) => {
-    const handler = (await import("./handler")).default;
-    await handler(sock, m.messages);
+    await handleMessage(sock, m.messages ?? [], m.type ?? "notify");
   });
 
   return {
     sock,
     shutdown: async () => {
-      try {
-        await sock.logout();
-      } catch {}
-      try {
-        sock.end(undefined);
-      } catch {}
+      try { sock.end(undefined); } catch {}
     },
   };
 }
 
-function scheduleReconnect(delay: number) {
+function scheduleReconnect(delay: number, onReconnect: (d: number) => void) {
   if (reconnectTimer) return;
   console.log(`[bot] Reintentando en ${delay}ms...`);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    console.log("[bot] Reconectando...");
+    onReconnect(delay);
   }, delay);
 }
 
-export async function startBot(authPath: string): Promise<BaileysHandle> {
-  return createSocket(authPath);
+export async function startBot(
+  authPath: string,
+  onReconnect: (delay: number) => void
+): Promise<BaileysHandle> {
+  return createSocket(authPath, onReconnect);
 }
 
 export function clearReconnectTimer() {

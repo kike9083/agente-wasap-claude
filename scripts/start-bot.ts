@@ -1,58 +1,60 @@
 import "./env-loader";
 import path from "node:path";
 import fs from "node:fs";
-import { startBot, clearReconnectTimer } from "../src/lib/baileys/client";
+import { startBot, clearReconnectTimer, resolveJid } from "../src/lib/baileys/client";
 import {
   getPendingOutbox,
   markOutboxSent,
-  db,
-  getConnectionState,
+  insertMessage,
   setConnectionState,
+  getRestartFlag,
+  clearRestartFlag,
 } from "../src/lib/db";
 
 const authDir = path.resolve(process.cwd(), "auth");
-const restartFlagPath = path.resolve(process.cwd(), "data/.restart");
 
 let handle: Awaited<ReturnType<typeof startBot>> | null = null;
 let outboxInterval: NodeJS.Timeout | null = null;
 let restartCheckInterval: NodeJS.Timeout | null = null;
+let lastRestartFlag: number | null = null;
 
 async function start() {
   try {
-    const authPath = authDir;
     console.log("[bot] Iniciando Baileys...");
-    handle = await startBot(authPath);
+    handle = await startBot(authDir, handleReconnect);
     console.log("[bot] Baileys iniciado");
 
-    startOutboxPoller();
-    startRestartChecker();
+    if (!outboxInterval) startOutboxPoller();
+    if (!restartCheckInterval) startRestartChecker();
   } catch (err) {
     console.error("[bot] Error iniciando Baileys:", err);
-    process.exit(1);
+    setTimeout(() => start(), 5000);
   }
 }
 
-function startOutboxPoller() {
-  if (outboxInterval) clearInterval(outboxInterval);
+async function handleReconnect(_delay: number) {
+  console.log("[bot] Reconectando...");
+  if (handle) {
+    try { handle.sock.end(undefined); } catch {}
+    handle = null;
+  }
+  await start();
+}
 
+function startOutboxPoller() {
   outboxInterval = setInterval(async () => {
     if (!handle) return;
-
     try {
-      const pending = getPendingOutbox(20);
+      const pending = await getPendingOutbox(20);
       for (const item of pending) {
         try {
-          const jid = `${item.phone}@s.whatsapp.net`;
+          const jid = resolveJid(item.phone);
           await handle.sock.sendMessage(jid, { text: item.content });
-          markOutboxSent(item.id);
-          console.log(
-            `[bot] → Mensaje outbox enviado a ${item.phone} (ID: ${item.id})`
-          );
+          await insertMessage(item.conversation_id, "assistant", item.content);
+          await markOutboxSent(item.id);
+          console.log(`[bot] → Outbox enviado a ${item.phone}`);
         } catch (err) {
-          console.error(
-            `[bot] Error enviando outbox ${item.id}:`,
-            err instanceof Error ? err.message : err
-          );
+          console.error(`[bot] Error enviando outbox ${item.id}:`, err instanceof Error ? err.message : err);
         }
       }
     } catch (err) {
@@ -62,46 +64,40 @@ function startOutboxPoller() {
 }
 
 function startRestartChecker() {
-  if (restartCheckInterval) clearInterval(restartCheckInterval);
-
   restartCheckInterval = setInterval(async () => {
-    if (fs.existsSync(restartFlagPath)) {
-      console.log("[bot] Flag .restart detectado, reconectando...");
-      fs.unlinkSync(restartFlagPath);
+    try {
+      const flag = await getRestartFlag();
+      if (!flag || flag === lastRestartFlag) return;
+
+      lastRestartFlag = flag;
+      console.log("[bot] Reinicio solicitado desde dashboard...");
+      await clearRestartFlag();
+
+      clearReconnectTimer();
 
       if (handle) {
-        try {
-          await handle.shutdown();
-        } catch {}
+        try { handle.sock.end(undefined); } catch {}
         handle = null;
       }
 
-      clearReconnectTimer();
-      if (outboxInterval) clearInterval(outboxInterval);
-      if (restartCheckInterval) clearInterval(restartCheckInterval);
+      try { fs.rmSync(authDir, { recursive: true, force: true }); } catch {}
 
-      try {
-        fs.rmSync(authDir, { recursive: true, force: true });
-      } catch {}
-
+      await setConnectionState({ status: "disconnected", qr_string: null, phone: null });
       await start();
+    } catch (err) {
+      console.error("[bot] Error en restart checker:", err);
     }
-  }, 1000);
+  }, 2000);
 }
 
 async function shutdown() {
   console.log("[bot] Apagando...");
-
   if (restartCheckInterval) clearInterval(restartCheckInterval);
   if (outboxInterval) clearInterval(outboxInterval);
-
+  clearReconnectTimer();
   if (handle) {
-    try {
-      await handle.shutdown();
-    } catch {}
+    try { handle.sock.end(undefined); } catch {}
   }
-
-  db.close();
   process.exit(0);
 }
 

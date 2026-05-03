@@ -1,7 +1,7 @@
 "use client";
 
 interface Conversation {
-  id: number;
+  id: string;
   phone: string;
   name: string | null;
   mode: "AI" | "HUMAN";
@@ -9,10 +9,14 @@ interface Conversation {
   last_message_preview?: string | null;
 }
 
+function formatPhone(phone: string): string {
+  return phone.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, "");
+}
+
 interface ConversationListProps {
   conversations: Conversation[];
-  selectedId?: number;
-  onSelect: (id: number) => void;
+  selectedId?: string;
+  onSelect: (id: string) => void;
 }
 
 function formatRelativeTime(ts: number | null): string {
@@ -31,12 +35,13 @@ export function ConversationList({
   onSelect,
 }: ConversationListProps) {
   return (
-    <div className="flex flex-col gap-1 overflow-y-auto max-h-screen scrollbar-thin">
+    <div className="flex flex-col overflow-y-auto h-full scrollbar-thin">
       {conversations.length === 0 ? (
         <p className="text-center text-gray-500 py-8">Sin conversaciones</p>
       ) : (
         conversations.map((conv) => (
           <button
+            type="button"
             key={conv.id}
             onClick={() => onSelect(conv.id)}
             className={`text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-100 transition ${
@@ -45,9 +50,18 @@ export function ConversationList({
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm text-gray-900 truncate">
-                  {conv.name || conv.phone}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-sm text-gray-900 truncate">
+                    {conv.name || formatPhone(conv.phone)}
+                  </p>
+                  {/* Punto pulsante cuando el chat está en HUMAN y esperando respuesta */}
+                  {conv.mode === "HUMAN" && (
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-gray-500 truncate">
                   {conv.last_message_preview || "Sin mensajes"}
                 </p>
@@ -60,7 +74,7 @@ export function ConversationList({
                       : "bg-amber-100 text-amber-700"
                   }`}
                 >
-                  {conv.mode}
+                  {conv.mode === "AI" ? "IA" : "HUMANO"}
                 </span>
                 <span className="text-xs text-gray-400">
                   {formatRelativeTime(conv.last_message_at)}

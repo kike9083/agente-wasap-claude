@@ -7,13 +7,8 @@ interface Ctx {
 
 export async function POST(req: NextRequest, { params }: Ctx) {
   const { conversationId } = await params;
-  const id = parseInt(conversationId, 10);
 
-  if (isNaN(id)) {
-    return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
-  }
-
-  const convo = getConversationById(id);
+  const convo = await getConversationById(conversationId);
   if (!convo) {
     return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
   }
@@ -26,13 +21,10 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   }
 
   try {
-    setMode(id, mode);
+    await setMode(conversationId, mode);
     return NextResponse.json({ ok: true, mode });
   } catch (err) {
     console.error("Error setting mode:", err);
-    return NextResponse.json(
-      { error: "Failed to set mode" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to set mode" }, { status: 500 });
   }
 }

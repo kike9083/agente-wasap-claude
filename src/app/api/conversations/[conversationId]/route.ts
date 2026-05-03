@@ -7,20 +7,16 @@ interface Ctx {
 
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const { conversationId } = await params;
-  const id = parseInt(conversationId, 10);
 
-  if (isNaN(id)) {
+  if (!conversationId) {
     return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
   }
 
   try {
-    deleteConversation(id);
+    await deleteConversation(conversationId);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("Error deleting conversation:", err);
-    return NextResponse.json(
-      { error: "Failed to delete" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
   }
 }

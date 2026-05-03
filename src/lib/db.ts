@@ -1,294 +1,350 @@
-import Database from "better-sqlite3";
-import path from "node:path";
-import fs from "node:fs";
-
-const dataDir = path.resolve(process.cwd(), "data");
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const dbPath = path.join(dataDir, "messages.db");
-const db = new Database(dbPath);
-
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
-
-// Schema
-db.exec(`
-  PRAGMA journal_mode = WAL;
-  PRAGMA foreign_keys = ON;
-
-  CREATE TABLE IF NOT EXISTS conversations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    phone TEXT UNIQUE NOT NULL,
-    name TEXT,
-    mode TEXT CHECK(mode IN ('AI','HUMAN')) NOT NULL DEFAULT 'AI',
-    last_message_at INTEGER,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch())
-  );
-
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    conversation_id INTEGER NOT NULL REFERENCES conversations(id),
-    role TEXT CHECK(role IN ('user','assistant','human')) NOT NULL,
-    content TEXT NOT NULL,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch())
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_messages_conv
-    ON messages(conversation_id, created_at);
-
-  CREATE TABLE IF NOT EXISTS connection_state (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    status TEXT CHECK(status IN ('disconnected','qr','connecting','connected'))
-      NOT NULL DEFAULT 'disconnected',
-    qr_string TEXT,
-    phone TEXT,
-    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-  );
-
-  INSERT OR IGNORE INTO connection_state (id, status) VALUES (1, 'disconnected');
-
-  CREATE TABLE IF NOT EXISTS outbox (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    conversation_id INTEGER NOT NULL,
-    phone TEXT NOT NULL,
-    content TEXT NOT NULL,
-    sent INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch())
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_outbox_pending
-    ON outbox(sent, created_at);
-`);
+import { ID, Query } from "node-appwrite";
+import { databases, DATABASE_ID, COLLECTIONS, SINGLETON_ID } from "./appwrite";
 
 export interface Conversation {
-  id: number;
+  id: string;
   phone: string;
   name: string | null;
   mode: "AI" | "HUMAN";
   last_message_at: number | null;
+  last_message_preview: string | null;
   created_at: number;
-  last_message_preview?: string | null;
 }
 
 export interface Message {
-  id: number;
-  conversation_id: number;
+  id: string;
+  conversation_id: string;
   role: "user" | "assistant" | "human";
   content: string;
   created_at: number;
 }
 
 export interface ConnectionState {
-  id: 1;
   status: "disconnected" | "qr" | "connecting" | "connected";
   qr_string: string | null;
   phone: string | null;
   updated_at: number;
 }
 
-export function getOrCreateConversation(
+function docToConversation(doc: any): Conversation {
+  return {
+    id: doc.$id,
+    phone: doc.phone,
+    name: doc.name ?? null,
+    mode: (doc.mode ?? "AI") as "AI" | "HUMAN",
+    last_message_at: doc.lastMessageAt ?? null,
+    last_message_preview: doc.lastMessagePreview ?? null,
+    created_at: doc.createdAt,
+  };
+}
+
+function docToMessage(doc: any): Message {
+  return {
+    id: doc.$id,
+    conversation_id: doc.conversationId,
+    role: doc.role as "user" | "assistant" | "human",
+    content: doc.content,
+    created_at: doc.createdAt,
+  };
+}
+
+export async function getOrCreateConversation(
   phone: string,
   name?: string
-): Conversation {
-  const existing = db
-    .prepare("SELECT * FROM conversations WHERE phone = ?")
-    .get(phone) as Conversation | undefined;
+): Promise<Conversation> {
+  const result = await databases.listDocuments(
+    DATABASE_ID,
+    COLLECTIONS.conversations,
+    [Query.equal("phone", phone), Query.limit(1)]
+  );
 
-  if (existing) {
-    return existing;
+  if (result.documents.length > 0) {
+    const doc = result.documents[0];
+    if (name && name !== doc.name) {
+      await databases.updateDocument(
+        DATABASE_ID,
+        COLLECTIONS.conversations,
+        doc.$id,
+        { name }
+      );
+      return { ...docToConversation(doc), name };
+    }
+    return docToConversation(doc);
   }
 
-  const stmt = db.prepare(
-    `INSERT INTO conversations (phone, name, mode, created_at)
-     VALUES (?, ?, 'AI', unixepoch())`
+  const now = Math.floor(Date.now() / 1000);
+  const doc = await databases.createDocument(
+    DATABASE_ID,
+    COLLECTIONS.conversations,
+    ID.unique(),
+    { phone, name: name ?? null, mode: "AI", createdAt: now }
   );
-  stmt.run(phone, name || null);
-
-  return db
-    .prepare("SELECT * FROM conversations WHERE phone = ?")
-    .get(phone) as Conversation;
+  return docToConversation(doc);
 }
 
-export function getConversationById(id: number): Conversation | null {
-  return (
-    (db.prepare("SELECT * FROM conversations WHERE id = ?").get(id) as
-      | Conversation
-      | undefined) || null
-  );
+export async function getConversationById(
+  id: string
+): Promise<Conversation | null> {
+  try {
+    const doc = await databases.getDocument(
+      DATABASE_ID,
+      COLLECTIONS.conversations,
+      id
+    );
+    return docToConversation(doc);
+  } catch {
+    return null;
+  }
 }
 
-export function insertMessage(
-  conversationId: number,
+export async function listConversations(): Promise<Conversation[]> {
+  const result = await databases.listDocuments(
+    DATABASE_ID,
+    COLLECTIONS.conversations,
+    [Query.orderDesc("lastMessageAt"), Query.limit(100)]
+  );
+  return result.documents.map(docToConversation);
+}
+
+export async function insertMessage(
+  conversationId: string,
   role: "user" | "assistant" | "human",
   content: string
-): Message {
-  db.exec(`BEGIN TRANSACTION;`);
-  const insertStmt = db.prepare(
-    `INSERT INTO messages (conversation_id, role, content, created_at)
-     VALUES (?, ?, ?, unixepoch())`
+): Promise<Message> {
+  const now = Math.floor(Date.now() / 1000);
+
+  const doc = await databases.createDocument(
+    DATABASE_ID,
+    COLLECTIONS.messages,
+    ID.unique(),
+    { conversationId, role, content, createdAt: now }
   );
-  insertStmt.run(conversationId, role, content);
 
-  const updateStmt = db.prepare(
-    `UPDATE conversations SET last_message_at = unixepoch() WHERE id = ?`
-  );
-  updateStmt.run(conversationId);
+  // Actualizar preview en la conversación (no crítico si falla)
+  databases
+    .updateDocument(DATABASE_ID, COLLECTIONS.conversations, conversationId, {
+      lastMessageAt: now,
+      lastMessagePreview: content.slice(0, 200),
+    })
+    .catch(() => {});
 
-  db.exec(`COMMIT;`);
-
-  return db
-    .prepare(
-      `SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1`
-    )
-    .get(conversationId) as Message;
+  return docToMessage(doc);
 }
 
-export function getMessages(conversationId: number, limit = 50): Message[] {
-  return db
-    .prepare(
-      `SELECT * FROM messages WHERE conversation_id = ?
-       ORDER BY created_at DESC LIMIT ?`
-    )
-    .all(conversationId, limit) as Message[];
+export async function getMessages(
+  conversationId: string,
+  limit = 50
+): Promise<Message[]> {
+  const result = await databases.listDocuments(
+    DATABASE_ID,
+    COLLECTIONS.messages,
+    [
+      Query.equal("conversationId", conversationId),
+      Query.orderDesc("createdAt"),
+      Query.limit(limit),
+    ]
+  );
+  return result.documents.map(docToMessage);
 }
 
-export function getRecentHistory(
-  conversationId: number,
+export async function getRecentHistory(
+  conversationId: string,
   limit = 20
-): Array<{ role: "user" | "assistant"; content: string }> {
-  const messages = db
-    .prepare(
-      `SELECT role, content FROM messages WHERE conversation_id = ?
-       ORDER BY created_at ASC LIMIT ?`
-    )
-    .all(conversationId, limit) as Array<{
-    role: "user" | "assistant" | "human";
-    content: string;
-  }>;
-
-  return messages.map((m) => ({
-    role: m.role === "human" ? "assistant" : m.role,
-    content: m.content,
-  }));
+): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
+  const result = await databases.listDocuments(
+    DATABASE_ID,
+    COLLECTIONS.messages,
+    [
+      Query.equal("conversationId", conversationId),
+      Query.orderDesc("createdAt"),
+      Query.limit(limit),
+    ]
+  );
+  return result.documents
+    .reverse()
+    .map((doc) => ({
+      role: (doc.role === "human" ? "assistant" : doc.role) as
+        | "user"
+        | "assistant",
+      content: doc.content,
+    }));
 }
 
-export function setMode(
-  conversationId: number,
+export async function setMode(
+  conversationId: string,
   mode: "AI" | "HUMAN"
-): void {
-  db.prepare("UPDATE conversations SET mode = ? WHERE id = ?").run(
-    mode,
-    conversationId
+): Promise<void> {
+  await databases.updateDocument(
+    DATABASE_ID,
+    COLLECTIONS.conversations,
+    conversationId,
+    { mode }
   );
 }
 
-export function listConversations(): Conversation[] {
-  return db
-    .prepare(
-      `SELECT c.*,
-        (SELECT content FROM messages WHERE conversation_id = c.id
-         ORDER BY created_at DESC LIMIT 1) as last_message_preview
-       FROM conversations c
-       ORDER BY c.last_message_at DESC NULLS LAST`
-    )
-    .all() as Conversation[];
+export async function deleteConversation(id: string): Promise<void> {
+  // Borrar mensajes en lotes
+  let cursor: string | undefined;
+  while (true) {
+    const queries: any[] = [
+      Query.equal("conversationId", id),
+      Query.limit(100),
+    ];
+    if (cursor) queries.push(Query.cursorAfter(cursor));
+    const msgs = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.messages,
+      queries
+    );
+    for (const doc of msgs.documents) {
+      await databases.deleteDocument(DATABASE_ID, COLLECTIONS.messages, doc.$id);
+    }
+    if (msgs.documents.length < 100) break;
+    cursor = msgs.documents[msgs.documents.length - 1].$id;
+  }
+
+  // Borrar outbox pendiente
+  const outbox = await databases.listDocuments(DATABASE_ID, COLLECTIONS.outbox, [
+    Query.equal("conversationId", id),
+    Query.equal("status", "pending"),
+    Query.limit(100),
+  ]);
+  for (const doc of outbox.documents) {
+    await databases.deleteDocument(DATABASE_ID, COLLECTIONS.outbox, doc.$id);
+  }
+
+  await databases.deleteDocument(DATABASE_ID, COLLECTIONS.conversations, id);
 }
 
-export function getConnectionState(): ConnectionState {
-  const state = db
-    .prepare("SELECT * FROM connection_state WHERE id = 1")
-    .get() as ConnectionState | undefined;
-
-  return (
-    state || {
-      id: 1,
+export async function getConnectionState(): Promise<ConnectionState> {
+  try {
+    const doc = await databases.getDocument(
+      DATABASE_ID,
+      COLLECTIONS.connection_state,
+      SINGLETON_ID
+    );
+    return {
+      status: doc.status as ConnectionState["status"],
+      qr_string: doc.qrString ?? null,
+      phone: doc.phone ?? null,
+      updated_at: doc.updatedAt,
+    };
+  } catch {
+    return {
       status: "disconnected",
       qr_string: null,
       phone: null,
       updated_at: Math.floor(Date.now() / 1000),
-    }
-  );
-}
-
-export function setConnectionState(partial: Partial<ConnectionState>): void {
-  const current = getConnectionState();
-  const updated: ConnectionState = {
-    id: 1,
-    status: partial.status ?? current.status,
-    qr_string:
-      partial.qr_string === null ? null : partial.qr_string ?? current.qr_string,
-    phone: partial.phone === null ? null : partial.phone ?? current.phone,
-    updated_at: Math.floor(Date.now() / 1000),
-  };
-
-  db.prepare(
-    `INSERT INTO connection_state (id, status, qr_string, phone, updated_at)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       status = excluded.status,
-       qr_string = excluded.qr_string,
-       phone = excluded.phone,
-       updated_at = excluded.updated_at`
-  ).run(
-    updated.id,
-    updated.status,
-    updated.qr_string,
-    updated.phone,
-    updated.updated_at
-  );
-}
-
-export function enqueueOutbox(
-  conversationId: number,
-  phone: string,
-  content: string
-): void {
-  db.prepare(
-    `INSERT INTO outbox (conversation_id, phone, content, sent, created_at)
-     VALUES (?, ?, ?, 0, unixepoch())`
-  ).run(conversationId, phone, content);
-}
-
-export function getPendingOutbox(limit = 20): Array<{
-  id: number;
-  conversation_id: number;
-  phone: string;
-  content: string;
-  created_at: number;
-}> {
-  return db
-    .prepare(
-      `SELECT id, conversation_id, phone, content, created_at FROM outbox
-       WHERE sent = 0 ORDER BY created_at ASC LIMIT ?`
-    )
-    .all(limit) as Array<{
-    id: number;
-    conversation_id: number;
-    phone: string;
-    content: string;
-    created_at: number;
-  }>;
-}
-
-export function markOutboxSent(id: number): void {
-  db.prepare("UPDATE outbox SET sent = 1 WHERE id = ?").run(id);
-}
-
-export function deleteConversation(id: number): void {
-  db.exec(`BEGIN TRANSACTION;`);
-  try {
-    db.prepare("DELETE FROM messages WHERE conversation_id = ?").run(id);
-    db.prepare("DELETE FROM outbox WHERE conversation_id = ? AND sent = 0").run(
-      id
-    );
-    db.prepare("DELETE FROM conversations WHERE id = ?").run(id);
-    db.exec(`COMMIT;`);
-  } catch (err) {
-    db.exec(`ROLLBACK;`);
-    throw err;
+    };
   }
 }
 
-export { db };
+export async function setConnectionState(
+  partial: Partial<ConnectionState>
+): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  const data: Record<string, any> = { updatedAt: now };
+  if (partial.status !== undefined) data.status = partial.status;
+  if ("qr_string" in partial) data.qrString = partial.qr_string ?? null;
+  if ("phone" in partial) data.phone = partial.phone ?? null;
+
+  try {
+    await databases.updateDocument(
+      DATABASE_ID,
+      COLLECTIONS.connection_state,
+      SINGLETON_ID,
+      data
+    );
+  } catch {
+    await databases.createDocument(
+      DATABASE_ID,
+      COLLECTIONS.connection_state,
+      SINGLETON_ID,
+      {
+        status: partial.status ?? "disconnected",
+        qrString: partial.qr_string ?? null,
+        phone: partial.phone ?? null,
+        updatedAt: now,
+      }
+    );
+  }
+}
+
+export async function enqueueOutbox(
+  conversationId: string,
+  phone: string,
+  content: string
+): Promise<void> {
+  await databases.createDocument(DATABASE_ID, COLLECTIONS.outbox, ID.unique(), {
+    conversationId,
+    phone,
+    content,
+    status: "pending",
+    createdAt: Math.floor(Date.now() / 1000),
+  });
+}
+
+export async function getPendingOutbox(limit = 20): Promise<
+  Array<{ id: string; conversation_id: string; phone: string; content: string }>
+> {
+  const result = await databases.listDocuments(DATABASE_ID, COLLECTIONS.outbox, [
+    Query.equal("status", "pending"),
+    Query.orderAsc("createdAt"),
+    Query.limit(limit),
+  ]);
+  return result.documents.map((doc) => ({
+    id: doc.$id,
+    conversation_id: doc.conversationId,
+    phone: doc.phone,
+    content: doc.content,
+  }));
+}
+
+export async function markOutboxSent(id: string): Promise<void> {
+  await databases.updateDocument(DATABASE_ID, COLLECTIONS.outbox, id, {
+    status: "sent",
+  });
+}
+
+export async function requestRestart(): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    await databases.updateDocument(
+      DATABASE_ID,
+      COLLECTIONS.restart_flag,
+      SINGLETON_ID,
+      { requestedAt: now }
+    );
+  } catch {
+    await databases.createDocument(
+      DATABASE_ID,
+      COLLECTIONS.restart_flag,
+      SINGLETON_ID,
+      { requestedAt: now }
+    );
+  }
+}
+
+export async function getRestartFlag(): Promise<number | null> {
+  try {
+    const doc = await databases.getDocument(
+      DATABASE_ID,
+      COLLECTIONS.restart_flag,
+      SINGLETON_ID
+    );
+    return doc.requestedAt ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearRestartFlag(): Promise<void> {
+  try {
+    await databases.updateDocument(
+      DATABASE_ID,
+      COLLECTIONS.restart_flag,
+      SINGLETON_ID,
+      { requestedAt: null }
+    );
+  } catch {}
+}

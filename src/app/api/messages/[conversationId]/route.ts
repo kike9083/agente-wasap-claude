@@ -7,25 +7,14 @@ interface Ctx {
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { conversationId } = await params;
-  const id = parseInt(conversationId, 10);
-
-  if (isNaN(id)) {
-    return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
-  }
-
-  const messages = getMessages(id, 50);
+  const messages = await getMessages(conversationId, 50);
   return NextResponse.json({ messages: messages.reverse() });
 }
 
 export async function POST(req: NextRequest, { params }: Ctx) {
   const { conversationId } = await params;
-  const id = parseInt(conversationId, 10);
 
-  if (isNaN(id)) {
-    return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
-  }
-
-  const convo = getConversationById(id);
+  const convo = await getConversationById(conversationId);
   if (!convo) {
     return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
   }
@@ -38,18 +27,15 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   }
 
   try {
-    const msg = insertMessage(id, role, content);
+    const msg = await insertMessage(conversationId, role, content);
 
     if (role === "human") {
-      enqueueOutbox(id, convo.phone, content);
+      await enqueueOutbox(conversationId, convo.phone, content);
     }
 
     return NextResponse.json({ ok: true, messageId: msg.id });
   } catch (err) {
     console.error("Error inserting message:", err);
-    return NextResponse.json(
-      { error: "Failed to insert message" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to insert message" }, { status: 500 });
   }
 }
