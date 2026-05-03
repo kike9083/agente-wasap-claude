@@ -1,0 +1,34 @@
+# Environment
+.env.local
+.env
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+
+# Runtime
+data/
+auth/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.coverage/

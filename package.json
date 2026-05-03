@@ -1,0 +1,42 @@
+{
+  "name": "agente-whatsapp",
+  "version": "0.1.0",
+  "description": "Agente de WhatsApp local con Baileys, SQLite y dashboard Next.js",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "start:bot": "tsx scripts/start-bot.ts",
+    "start:all": "concurrently --kill-others --names BOT,WEB --prefix-colors yellow,cyan \"npm run start:bot\" \"npm run start\""
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.0",
+    "@anthropic-ai/sdk": "^0.16.0",
+    "better-sqlite3": "^11.0.0",
+    "concurrently": "^8.2.2",
+    "next": "^16.0.0",
+    "openai": "^4.52.0",
+    "pino": "^9.0.0",
+    "qrcode": "^1.5.3",
+    "qrcode-terminal": "^0.12.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tsx": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.10.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.17",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.3.3"
+  }
+}
