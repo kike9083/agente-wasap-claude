@@ -337,10 +337,29 @@ Cualquier ruta protegida → middleware.ts
   - Health check: cada 30s con timeout de 5s
   - Variables de entorno: todas las requeridas documentadas (vacías, para llenar en panel EasyPanel)
 - **Git:** Archivo `easypanel.json` pusheado a GitHub (commit: 74ad2c2).
-- **Próximo paso:** Usuario debe:
-  1. Acceder al panel de EasyPanel en `https://varios-appwrite.fjueze.easypanel.host` (o URL específica)
-  2. Crear nuevo servicio/aplicación
-  3. Conectar repositorio GitHub: `kike9083/agente-wasap-claude`
-  4. Seleccionar rama `master`
-  5. Llenar variables de entorno (OpenRouter key, Groq key, HOST_PHONE, etc.)
-  6. Confirmar deploy — EasyPanel hace `npm install`, `npm run build`, `npm start`
+- **Deploy API:** Se descubrió que EasyPanel usa API tRPC con prefijo `services.app.*` (no `app.*`).
+  - Endpoint correcto: `services.app.createService`, `services.app.updateSourceGithub`, `services.app.updateBuild`, `services.app.updateEnv`, `services.app.deployService`
+  - Servicio `agente-wasap` creado en proyecto `varios` ✅
+  - GitHub conectado (repo: kike9083/agente-wasap-claude, rama: master) ✅
+  - Variables de entorno configuradas (todas del .env.local) ✅
+  - Build type: dockerfile ✅
+- **Problema pendiente:** Docker build falla con exit code 1 sin logs visibles. Se probaron:
+  - Dockerfile Alpine (falló)
+  - Dockerfile node:20-slim Debian (falló)
+  - Dockerfile multi-stage (falló)
+  - Nixpacks (cancelado por timeout)
+  - Buildpacks (cancelado por timeout)
+  - Dockerfile Alpine mínimo `FROM alpine:3.18` (en prueba al cierre de sesión)
+- **Diagnóstico:** Alpine mínimo `FROM alpine:3.18` desplegó OK. `npm install` solo también OK. El error ocurre específicamente durante `npm run build` (Next.js). Build local con `NODE_ENV=production` funciona perfectamente. En progreso: intentando con `node:20` completo en Docker.
+
+### 2026-05-04 — Deploy completo en EasyPanel ✅
+
+- **Root cause del build failure:** `webpush.setVapidDetails()` se ejecutaba a nivel de módulo en `src/lib/push.ts` con `process.env.VAPID_EMAIL` que es `undefined` en build time → `Error: No subject set in vapidDetails.subject` → `Failed to collect page data for /api/push/subscribe`.
+- **Fix aplicado:**
+  - `src/lib/push.ts`: inicialización VAPID ahora es lazy (función `ensureVapid()` llamada solo en `sendPushToAll()`).
+  - `src/app/api/push/subscribe/route.ts`: añadido `export const dynamic = "force-dynamic"`.
+  - `src/app/api/push/unsubscribe/route.ts`: añadido `export const dynamic = "force-dynamic"`.
+- **GitHub Actions:** Build Docker exitoso en run `25305979807`. Imagen subida a `ghcr.io/kike9083/agente-wasap-claude:latest`.
+- **EasyPanel configurado:** Servicio `agente-wasap` en proyecto `varios`, build desde GitHub source (dockerfile), todas las variables de entorno configuradas.
+- **Dominio:** `https://varios-agente-wasap.fjueze.easypanel.host/` → HTTP 200 ✅
+- **PRÓXIMO PASO:** Escanear el QR de WhatsApp desde el dashboard para conectar el bot. La sesión de Baileys se guarda en `/app/auth/` dentro del container (volumen efímero, se pierde al reiniciar — si el bot se desconecta, habrá que escanear de nuevo).
