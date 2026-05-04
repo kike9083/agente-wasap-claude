@@ -7,7 +7,7 @@ const PUBLIC_PATHS = [
   "/api/connection",
 ];
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isPublic =
