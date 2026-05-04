@@ -1,14 +1,27 @@
-FROM node:20-slim
-
-RUN apt-get update && apt-get install -y python3 make g++ --no-install-recommends && rm -rf /var/lib/apt/lists/*
+FROM node:20 AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps --ignore-scripts
 
 COPY . .
 RUN npm run build
+
+FROM node:20-slim AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/next.config.ts ./
+COPY --from=builder /app/tsconfig.json ./
 
 EXPOSE 3000
 
