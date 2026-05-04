@@ -14,8 +14,8 @@ dist/
 build/
 
 # Runtime
-data/
-auth/
+/data/
+/auth/
 
 # Logs
 *.log
