@@ -1,0 +1,43 @@
+{
+  "name": "agente-wasap",
+  "description": "WhatsApp Bot con Dashboard - Jaiger House Collection",
+  "repository": "https://github.com/kike9083/agente-wasap-claude",
+  "branch": "master",
+  "buildCommand": "npm install && npm run build",
+  "startCommand": "npm start",
+  "ports": [
+    {
+      "container": 3000,
+      "public": true,
+      "protocol": "http"
+    },
+    {
+      "container": 3001,
+      "public": false,
+      "protocol": "http"
+    }
+  ],
+  "environment": {
+    "NODE_ENV": "production",
+    "OPENROUTER_API_KEY": "",
+    "OPENROUTER_MODEL": "openai/gpt-4o-mini",
+    "HOST_PHONE": "",
+    "APPWRITE_ENDPOINT": "https://varios-appwrite.fjueze.easypanel.host/v1",
+    "APPWRITE_PROJECT_ID": "69f7a4cc001de1e8b9b7",
+    "APPWRITE_API_KEY": "",
+    "APPWRITE_DATABASE_ID": "69f7a6100019fdcff9c9",
+    "GROQ_API_KEY": "",
+    "HUMAN_TIMEOUT_HOURS": "4",
+    "DASHBOARD_USERS": "admin@jaigerhouse.com",
+    "NEXT_PUBLIC_VAPID_PUBLIC_KEY": "",
+    "VAPID_PRIVATE_KEY": "",
+    "VAPID_EMAIL": ""
+  },
+  "healthCheck": {
+    "path": "/",
+    "interval": 30,
+    "timeout": 5,
+    "healthy": 2,
+    "unhealthy": 3
+  }
+}
