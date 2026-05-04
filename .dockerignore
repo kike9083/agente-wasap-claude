@@ -1,0 +1,8 @@
+.git
+node_modules
+.next
+auth
+.env.local
+.env
+load-test.js
+*.md

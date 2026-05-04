@@ -12,7 +12,8 @@
     "start": "next start -H 0.0.0.0",
     "lint": "next lint",
     "start:bot": "tsx scripts/start-bot.ts",
-    "dev:all": "concurrently --kill-others --names BOT,WEB --prefix-colors yellow,cyan \"npm run start:bot\" \"npm run dev\""
+    "dev:all": "concurrently --kill-others --names BOT,WEB --prefix-colors yellow,cyan \"npm run start:bot\" \"npm run dev\"",
+    "start:all": "concurrently --kill-others --names BOT,WEB \"npm run start:bot\" \"npm start\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.16.0",
