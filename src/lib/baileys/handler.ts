@@ -8,6 +8,7 @@ import {
 } from "../db";
 import { generateReply } from "../openrouter";
 import { getActiveSettings } from "../system-prompt";
+import { sendPushToAll } from "../push";
 import OpenAI from "openai";
 import { storage, BUCKET_ID } from "../appwrite";
 import { ID } from "node-appwrite";
@@ -176,6 +177,9 @@ export default async function handleMessage(
       if (isNew && activeSettings.welcome_message && !isImage) {
         const greeting = activeSettings.welcome_message.replace("{name}", pushName.split(" ")[0]);
         console.log(`[bot] Primer contacto de ${phone} — enviando bienvenida`);
+        await sock.sendPresenceUpdate("composing", remoteJid);
+        await new Promise(r => setTimeout(r, 1200));
+        await sock.sendPresenceUpdate("paused", remoteJid);
         await sock.sendMessage(remoteJid, { text: greeting });
         await insertMessage(convo.id, "assistant", greeting);
       }
@@ -190,11 +194,19 @@ export default async function handleMessage(
       const history = await getRecentHistory(convo.id, 20);
       console.log(`[bot] Llamando LLM con ${history.length} mensajes...`);
 
+      // Mostrar "escribiendo..." mientras el LLM procesa
+      await sock.sendPresenceUpdate("composing", remoteJid);
       const start = Date.now();
       const reply = await generateReply(history, text);
       const elapsed = Date.now() - start;
 
       console.log(`[bot] LLM respondió en ${elapsed}ms`);
+
+      // Garantizar un mínimo de tiempo de "escritura" proporcional al largo de la respuesta
+      const minTypingMs = Math.min(Math.max(reply.length * 25, 800), 3500);
+      const remaining = minTypingMs - elapsed;
+      if (remaining > 0) await new Promise(r => setTimeout(r, remaining));
+      await sock.sendPresenceUpdate("paused", remoteJid);
 
       await insertMessage(convo.id, "assistant", reply);
 
@@ -246,6 +258,11 @@ export default async function handleMessage(
       if (isEscalation(reply)) {
         console.log(`[bot] Escalacion detectada para ${phone} — notificando host`);
         await notifyHost(sock, pushName, phone, text);
+        await sendPushToAll({
+          title: "⚠️ Atención requerida",
+          body: `${pushName}: "${text.slice(0, 100)}"`,
+          url: "/",
+        }).catch((err) => console.error("[bot] Error enviando push:", err));
       }
     } catch (err) {
       console.error(`[bot] Error procesando mensaje:`, err);

@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     "better-sqlite3",
     "pino",
     "node-appwrite",
+    "web-push",
   ],
 };
 

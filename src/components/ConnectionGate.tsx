@@ -13,6 +13,7 @@ interface Conversation {
   mode: "AI" | "HUMAN";
   last_message_at: number | null;
   last_message_preview?: string | null;
+  tags: string[];
 }
 
 interface Message {
@@ -181,13 +182,18 @@ export function ConnectionGate() {
           `}
         >
           {selectedConv ? (
-            <ConversationPanel
+                      <ConversationPanel
               conversation={selectedConv}
               messages={messages}
               onModeChange={handleModeChange}
               onSendMessage={handleSendMessage}
               onDelete={handleDeleteConversation}
               onBack={() => setMobileView("list")}
+              onTagsChange={(tags) =>
+                setConversations((prev) =>
+                  prev.map((c) => (c.id === selectedConv.id ? { ...c, tags } : c))
+                )
+              }
               loading={loading}
             />
           ) : (

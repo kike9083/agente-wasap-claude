@@ -9,6 +9,7 @@ export interface Conversation {
   last_message_at: number | null;
   last_message_preview: string | null;
   created_at: number;
+  tags: string[];
 }
 
 export interface Message {
@@ -34,6 +35,8 @@ export interface BotSettings {
 }
 
 function docToConversation(doc: any): Conversation {
+  let tags: string[] = [];
+  try { tags = JSON.parse(doc.tags ?? "[]"); } catch { tags = []; }
   return {
     id: doc.$id,
     phone: doc.phone,
@@ -42,6 +45,7 @@ function docToConversation(doc: any): Conversation {
     last_message_at: doc.lastMessageAt ?? null,
     last_message_preview: doc.lastMessagePreview ?? null,
     created_at: doc.createdAt,
+    tags,
   };
 }
 
@@ -111,6 +115,18 @@ export async function listConversations(): Promise<Conversation[]> {
     [Query.orderDesc("lastMessageAt"), Query.limit(100)]
   );
   return result.documents.map(docToConversation);
+}
+
+export async function updateConversationTags(
+  id: string,
+  tags: string[]
+): Promise<void> {
+  await databases.updateDocument(
+    DATABASE_ID,
+    COLLECTIONS.conversations,
+    id,
+    { tags: JSON.stringify(tags) }
+  );
 }
 
 /**

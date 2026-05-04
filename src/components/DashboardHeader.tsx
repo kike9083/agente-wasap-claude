@@ -9,6 +9,30 @@ interface DashboardHeaderProps {
   loading?: boolean;
 }
 
+async function registerPush() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return;
+
+  const reg = await navigator.serviceWorker.register("/sw.js");
+  await navigator.serviceWorker.ready;
+
+  const existing = await reg.pushManager.getSubscription();
+  if (existing) return; // ya suscrito
+
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+  });
+
+  await fetch("/api/push/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(sub.toJSON()),
+  });
+}
+
 export function DashboardHeader({
   phone,
   onDisconnect,
@@ -17,6 +41,7 @@ export function DashboardHeader({
   const router = useRouter();
   const [userName, setUserName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [pushEnabled, setPushEnabled] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -28,11 +53,36 @@ export function DashboardHeader({
         }
       })
       .catch(console.error);
+
+    // Registrar push automáticamente si ya hay permiso concedido
+    if (typeof window !== "undefined" && Notification.permission === "granted") {
+      registerPush().catch(console.error);
+      setPushEnabled(true);
+    }
   }, []);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
+  }
+
+  async function handleTogglePush() {
+    if (pushEnabled) {
+      const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+      const sub = await reg?.pushManager.getSubscription();
+      if (sub) {
+        await fetch("/api/push/unsubscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      }
+      setPushEnabled(false);
+    } else {
+      await registerPush();
+      setPushEnabled(Notification.permission === "granted");
+    }
   }
 
   return (
@@ -59,6 +109,41 @@ export function DashboardHeader({
 
           {/* Botones */}
           <div className="flex items-center gap-1">
+            {/* Notificaciones push */}
+            {"Notification" in window && (
+              <button
+                type="button"
+                onClick={handleTogglePush}
+                title={pushEnabled ? "Desactivar notificaciones" : "Activar notificaciones"}
+                className={`px-2 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                  pushEnabled
+                    ? "bg-green-100 text-green-700 hover:bg-green-200"
+                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                }`}
+              >
+                {pushEnabled ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => router.push("/stats")}
+              className="px-2 py-1.5 md:px-4 md:py-2 rounded-lg bg-purple-50 text-purple-700 text-xs md:text-sm font-medium hover:bg-purple-100"
+            >
+              <span className="hidden md:inline">Estadísticas</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </button>
+
             <button
               type="button"
               onClick={() => router.push("/settings")}

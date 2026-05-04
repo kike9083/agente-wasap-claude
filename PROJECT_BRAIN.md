@@ -290,3 +290,15 @@ Cualquier ruta protegida → middleware.ts
   - Se descubrió una brecha crítica: `middleware.ts` en la raíz era ignorado por Next.js al existir la carpeta `src/`. Movido a `src/middleware.ts` para restaurar protección de rutas.
   - Se corrigió un bug nativo de Next.js 15 en las Route Handlers de Login/Logout, inyectando las cookies directamente en el objeto `NextResponse` para evitar rebotes de inicio de sesión y el subsecuente Rate Limit 429 de Appwrite.
 - **Multimedia:** Soporte para recepción de audios (Groq/Whisper) e imágenes (Appwrite Storage). Cuando el cliente envía una imagen, el bot notifica instantáneamente al host para intervención humana.
+
+### 2026-05-04 — Features de Dashboard + Etiquetas (sesión de Claude)
+- **Typing Indicator:** El bot muestra "escribiendo..." mientras el LLM procesa, con tiempo mínimo proporcional al largo de la respuesta (25ms/char, entre 800ms y 3500ms).
+- **Push Notifications (Web Push API):** Instalado `web-push`. Generadas claves VAPID. Endpoint `/api/push/subscribe` y `/api/push/unsubscribe`. Service Worker en `public/sw.js`. El bot envía push al navegador del host cuando detecta una escalación.
+  - Claves VAPID en `.env.local` como `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL`.
+  - Suscripciones guardadas en archivo local `push-subscriptions.json`.
+- **Búsqueda en conversaciones:** Filtro local en `ConversationList.tsx` por nombre, teléfono y preview del último mensaje.
+- **Estadísticas básicas:** Página `/stats` con tarjetas KPI (total convs, modo IA/HUMAN, mensajes hoy, promedio) y gráfico de barras de últimos 7 días. Ruta API `/api/stats`.
+- **Respuestas rápidas (Templates):** CRUD completo en `/api/templates` (GET/POST/DELETE). Templates guardados en `templates.json` local. En `ConversationPanel`, escribir `/` activa un dropdown de autocompletado. Gestión en `/settings`.
+- **Etiquetas por conversación:** Atributo `tags` (string JSON, máx 1000 chars) añadido a colección `conversations` vía `scripts/add-tags-attribute.ts`. API `/api/conversations/[id]/tags`. UI inline en `ConversationPanel` con colores por tipo (vip/urgente/reserva/etc) y sugerencias rápidas. Se sincronizan en tiempo real sin recargar.
+- **Corrección seguridad cookies (login):** Bug de Next.js 15 donde `cookieStore.set()` no persistía. Solucionado usando `response.cookies.set()` en los Route Handlers de login y logout.
+- **TS limpio:** 0 errores de compilación tras todos los cambios.

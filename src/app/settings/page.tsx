@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+interface Template { id: string; text: string }
+
 export default function SettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -12,19 +14,18 @@ export default function SettingsPage() {
   const [timeout, setTimeoutHours] = useState(24);
   const [llmModel, setLlmModel] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [newTemplate, setNewTemplate] = useState("");
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   useEffect(() => {
-    // Verificar rol del usuario
     fetch("/api/auth/me")
       .then((res) => res.json())
       .then((data) => {
-        if (data.user?.labels?.includes("admin")) {
-          setIsAdmin(true);
-        }
+        if (data.user?.labels?.includes("admin")) setIsAdmin(true);
       })
       .catch(console.error);
 
-    // Cargar configuración
     fetch("/api/settings")
       .then((res) => res.json())
       .then((data) => {
@@ -36,7 +37,38 @@ export default function SettingsPage() {
         }
       })
       .finally(() => setLoading(false));
+
+    fetch("/api/templates")
+      .then((r) => r.json())
+      .then((d) => setTemplates(d.templates ?? []))
+      .catch(console.error);
   }, []);
+
+  const handleAddTemplate = async () => {
+    if (!newTemplate.trim()) return;
+    setSavingTemplate(true);
+    try {
+      const res = await fetch("/api/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: newTemplate }),
+      });
+      const data = await res.json();
+      setTemplates((prev) => [...prev, data.template]);
+      setNewTemplate("");
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (id: string) => {
+    await fetch("/api/templates", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    setTemplates((prev) => prev.filter((t) => t.id !== id));
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -175,6 +207,60 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* ── Respuestas rápidas (Templates) ── */}
+        <div className="bg-white shadow rounded-lg p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">⚡ Respuestas Rápidas</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Guarda mensajes predefinidos. En el panel de conversación, escribe <code className="bg-gray-100 px-1 rounded">/</code> para seleccionarlos rápidamente.
+            </p>
+          </div>
+
+          {/* Lista de templates */}
+          <div className="space-y-2">
+            {templates.length === 0 && (
+              <p className="text-sm text-gray-400 italic">No hay respuestas rápidas guardadas.</p>
+            )}
+            {templates.map((t) => (
+              <div key={t.id} className="flex items-start gap-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                <p className="flex-1 text-sm text-gray-700 break-words">{t.text}</p>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteTemplate(t.id)}
+                  className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
+                  aria-label="Eliminar"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Añadir nuevo template */}
+          <div className="flex gap-2">
+            <textarea
+              className="flex-1 border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+              rows={2}
+              placeholder="Escribe la respuesta rápida..."
+              value={newTemplate}
+              onChange={(e) => setNewTemplate(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddTemplate(); }
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleAddTemplate}
+              disabled={savingTemplate || !newTemplate.trim()}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 self-end"
+            >
+              {savingTemplate ? "..." : "Agregar"}
+            </button>
+          </div>
         </div>
 
         <div className="flex justify-end">
