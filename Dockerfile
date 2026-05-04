@@ -5,12 +5,13 @@ RUN apt-get update && apt-get install -y python3 make g++ --no-install-recommend
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
-
-COPY . .
 
 ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY
 ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
+
+RUN NODE_ENV=development npm install --legacy-peer-deps
+
+COPY . .
 
 RUN NODE_OPTIONS="--max-old-space-size=1536" npm run build
 
