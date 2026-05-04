@@ -427,8 +427,30 @@ export async function searchProducts(query: string): Promise<any[]> {
       "products",
       [Query.limit(200)]
     );
-    const lowerQuery = query.toLowerCase();
-    return result.documents.filter(doc => doc.name.toLowerCase().includes(lowerQuery));
+    
+    const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    const queryWords = normalize(query).split(/\s+/).map(w => {
+      if (w.endsWith("es") && w.length > 4) return w.slice(0, -2);
+      if (w.endsWith("s") && w.length > 3) return w.slice(0, -1);
+      return w;
+    }).filter(w => w.length > 2); // ignorar preposiciones cortas
+    
+    if (queryWords.length === 0) return [];
+
+    const scoredProducts = result.documents.map(doc => {
+      const docName = normalize(doc.name);
+      let score = 0;
+      queryWords.forEach(word => {
+        if (docName.includes(word)) score++;
+      });
+      return { doc, score };
+    }).filter(p => p.score > 0);
+
+    // Ordenar por mayor cantidad de palabras coincidentes
+    scoredProducts.sort((a, b) => b.score - a.score);
+
+    return scoredProducts.map(p => p.doc);
   } catch (err) {
     console.error("Error buscando productos:", err);
     return [];

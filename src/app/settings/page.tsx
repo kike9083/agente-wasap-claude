@@ -200,6 +200,8 @@ export default function SettingsPage() {
                   onChange={(e) => setLlmModel(e.target.value)}
                 >
                   <optgroup label="— Gratuitos —">
+                    <option value="google/gemini-2.5-flash:free">Google Gemini 2.5 Flash · Gratis · Muy rápido e inteligente</option>
+                    <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct · Gratis · Excelente razonamiento</option>
                     <option value="nvidia/nemotron-3-super-120b-a12b:free">NVIDIA Nemotron 3 Super 120B · Gratis · Más potente free</option>
                     <option value="google/gemma-4-31b-it:free">Google Gemma 4 31B · Gratis · Buena conversación</option>
                     <option value="google/gemma-4-26b-a4b-it:free">Google Gemma 4 26B · Gratis · Ligero</option>

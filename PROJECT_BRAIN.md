@@ -318,3 +318,9 @@ Cualquier ruta protegida → middleware.ts
 - **Cambio a modo HUMAN en todas las escalaciones:** Se actualizó la función `isEscalation` en `handler.ts` para que cualquier escalación detectada (incluyendo las reglas del sistema que dicen explícitamente escalar si el cliente envía sus datos de confirmación de pago) fuerce también un cambio a modo **HUMAN**, asegurando que el asesor sea el que confirme los datos y no la IA.
 - **Actualización de System Prompt:** Se reescribió la regla en el System Prompt (y se actualizó dinámicamente en Appwrite usando un script temporal) para que obligue a la IA a escalar la conversación usando la frase exacta cuando el cliente envíe sus datos de confirmación (ID, correo, teléfono y ubicación).
 - **TS limpio:** 0 errores de compilación comprobados.
+
+### 2026-05-04 — Implementación de Function Calling (Catálogo Dinámico)
+- **Extracción de Catálogo (Scraping):** Se instaló `apify-client` y se creó `scripts/scrape-pensa.ts` para extraer 51 páginas de pensapanama.com (327 productos en Markdown) evadiendo bloqueos antibot.
+- **Base de Datos de Productos:** Se creó el script `scripts/seed-products.ts` para crear la colección `products` en Appwrite y popularla con los 109 productos únicos extraídos (SKU, nombre, precio, url).
+- **Function Calling (Herramientas LLM):** En lugar de meter el catálogo en el System Prompt, se modificó `src/lib/openrouter.ts` para proveerle al modelo la herramienta `searchAppwriteCatalog`. El LLM puede pausar su respuesta, llamar a la base de datos y obtener precios exactos.
+- **Algoritmo de Búsqueda Mejorado:** En `src/lib/db.ts` (`searchProducts`), se implementó un algoritmo robusto que normaliza texto (remueve acentos, pasa a minúsculas), aplica un *stemming* básico en español (quita plurales "s" y "es") y rankea resultados por coincidencia de múltiples palabras para búsquedas difusas exitosas.
