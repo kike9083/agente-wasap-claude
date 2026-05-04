@@ -42,3 +42,5 @@ El usuario **NO debe pedirte** que guardes los cambios. Hazlo siempre tú:
 | 5 | Cookies de sesión no persisten | Usar `response.cookies.set()`, NO `(await cookies()).set()` |
 | 6 | Bot no responde a `@lid` JIDs | Llamar `resolveJid()` antes de todo `sendMessage()` |
 | 7 | `env-loader.ts` debe ser el primer import de `start-bot.ts` | Sin esto, `process.env` está vacío |
+| 8 | Función en `middleware.ts` con nombre incorrecto | Next.js exige `export function middleware(...)` — cualquier otro nombre causa HTTP 500 en TODAS las rutas |
+| 9 | `package-lock.json` desincronizado con `package.json` | Correr `npm install --legacy-peer-deps` local y commitear el lock actualizado |

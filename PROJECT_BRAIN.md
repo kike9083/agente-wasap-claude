@@ -363,3 +363,29 @@ Cualquier ruta protegida → middleware.ts
 - **EasyPanel configurado:** Servicio `agente-wasap` en proyecto `varios`, build desde GitHub source (dockerfile), todas las variables de entorno configuradas.
 - **Dominio:** `https://varios-agente-wasap.fjueze.easypanel.host/` → HTTP 200 ✅
 - **PRÓXIMO PASO:** Escanear el QR de WhatsApp desde el dashboard para conectar el bot. La sesión de Baileys se guarda en `/app/auth/` dentro del container (volumen efímero, se pierde al reiniciar — si el bot se desconecta, habrá que escanear de nuevo).
+
+### 2026-05-04 — Re-deploy desde cero en EasyPanel (sesión nueva)
+
+- **Contexto:** El servicio `agente-wasap` fue eliminado de EasyPanel. Se recreó desde cero via API tRPC.
+- **Bugs encontrados y corregidos antes del deploy:**
+  1. `package-lock.json` desincronizado: `next` estaba bloqueado en `9.3.3` mientras `package.json` pedía `^15.1.0`. Causa: commits previos cambiaron el package.json sin regenerar el lock. Fix: `npm install --legacy-peer-deps` → now resolves `next@15.5.15`.
+  2. `scripts/debug-env-auth.ts` rompía el build de TypeScript: importaba `./src/lib/auth` que no existe. Eliminado (era script de diagnóstico temporal).
+  3. `tsconfig.json`: `jsx` cambiado de `react-jsx` a `preserve` (requerido por Next.js 15).
+- **Commits:** `428847b` — push a GitHub. Build local verifica OK (17 páginas, 0 errores TS).
+- **API EasyPanel (endpoints confirmados):**
+  - `services.app.createService` — crear servicio tipo app
+  - `services.app.updateSourceGithub` — configurar repo GitHub
+  - `services.app.updateBuild` — configurar build (nota: muestra `null` en inspect pero auto-detecta Dockerfile)
+  - `services.app.updateEnv` — variables de entorno (también son build args automáticamente)
+  - `services.app.deployService` — lanzar deploy
+  - `domains.createDomain` — añadir dominio (campos: `id`, `host`, `https`, `path`, `middlewares:[]`, `certificateResolver:""`, `wildcard:false`, `destinationType:"service"`, `serviceDestination:{projectName, serviceName, port, protocol:"http"}`)
+  - `domains.listDomains` — listar dominios de un servicio
+- **EasyPanel pasa env vars como build args automáticamente** → `NEXT_PUBLIC_VAPID_PUBLIC_KEY` disponible en build sin cambios al Dockerfile.
+- **Dominio:** `https://varios-agente-wasap.fjueze.easypanel.host/` → puerto 3000
+- **Bug crítico encontrado y corregido:** `src/middleware.ts` exportaba la función como `proxy` en vez de `middleware`. Next.js requiere el nombre `middleware` — cualquier otro nombre causa HTTP 500 en TODAS las rutas. Fix: commit `48f9b19`.
+- **Deploy final exitoso ✅** Commit `48f9b19` pusheado. Docker build completó correctamente.
+- **Verificado:**
+  - `https://varios-agente-wasap.fjueze.easypanel.host/` → HTTP 307 → `/login?from=/` ✅
+  - `https://varios-agente-wasap.fjueze.easypanel.host/login` → HTTP 200 ✅
+  - `https://varios-agente-wasap.fjueze.easypanel.host/api/connection/status` → HTTP 200 ✅
+- **PRÓXIMO PASO:** Escanear el QR de WhatsApp desde el dashboard para conectar el bot. La sesión de Baileys se guarda en `/app/auth/` dentro del container (volumen efímero — si el container se reinicia hay que escanear de nuevo).
