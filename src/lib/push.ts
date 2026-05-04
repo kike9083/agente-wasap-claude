@@ -4,11 +4,16 @@ import path from "path";
 
 const SUBS_FILE = path.join(process.cwd(), "push-subscriptions.json");
 
-webpush.setVapidDetails(
-  process.env.VAPID_EMAIL!,
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
+let vapidInitialized = false;
+function ensureVapid() {
+  if (vapidInitialized) return;
+  webpush.setVapidDetails(
+    process.env.VAPID_EMAIL!,
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+    process.env.VAPID_PRIVATE_KEY!
+  );
+  vapidInitialized = true;
+}
 
 export interface PushSubscription {
   endpoint: string;
@@ -42,6 +47,7 @@ export async function sendPushToAll(payload: {
   body: string;
   url?: string;
 }): Promise<void> {
+  ensureVapid();
   const subs = readSubs();
   if (subs.length === 0) return;
 

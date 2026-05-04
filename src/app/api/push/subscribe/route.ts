@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { saveSubscription } from "@/lib/push";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
   try {
     const sub = await req.json();
