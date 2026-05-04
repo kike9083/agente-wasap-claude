@@ -299,18 +299,24 @@ export async function setConnectionState(
       SINGLETON_ID,
       data
     );
-  } catch {
-    await databases.createDocument(
-      DATABASE_ID,
-      COLLECTIONS.connection_state,
-      SINGLETON_ID,
-      {
-        status: partial.status ?? "disconnected",
-        qrString: partial.qr_string ?? null,
-        phone: partial.phone ?? null,
-        updatedAt: now,
-      }
-    );
+  } catch (err: any) {
+    // Si el error es 404 (no existe), lo creamos.
+    // Si es otro error (ej: red), lo lanzamos para no intentar crear un duplicado.
+    if (err.code === 404) {
+      await databases.createDocument(
+        DATABASE_ID,
+        COLLECTIONS.connection_state,
+        SINGLETON_ID,
+        {
+          status: partial.status ?? "disconnected",
+          qrString: partial.qr_string ?? null,
+          phone: partial.phone ?? null,
+          updatedAt: now,
+        }
+      );
+    } else {
+      throw err;
+    }
   }
 }
 
@@ -359,13 +365,17 @@ export async function requestRestart(): Promise<void> {
       SINGLETON_ID,
       { requestedAt: now }
     );
-  } catch {
-    await databases.createDocument(
-      DATABASE_ID,
-      COLLECTIONS.restart_flag,
-      SINGLETON_ID,
-      { requestedAt: now }
-    );
+  } catch (err: any) {
+    if (err.code === 404) {
+      await databases.createDocument(
+        DATABASE_ID,
+        COLLECTIONS.restart_flag,
+        SINGLETON_ID,
+        { requestedAt: now }
+      );
+    } else {
+      throw err;
+    }
   }
 }
 
@@ -390,7 +400,16 @@ export async function clearRestartFlag(): Promise<void> {
       SINGLETON_ID,
       { requestedAt: null }
     );
-  } catch {}
+  } catch (err: any) {
+    if (err.code === 404) {
+      await databases.createDocument(
+        DATABASE_ID,
+        COLLECTIONS.restart_flag,
+        SINGLETON_ID,
+        { requestedAt: null }
+      );
+    }
+  }
 }
 export async function getBotSettings(): Promise<BotSettings | null> {
   try {

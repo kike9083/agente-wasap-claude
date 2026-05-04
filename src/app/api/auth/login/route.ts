@@ -26,13 +26,14 @@ function verifyPassword(plain: string, stored: string): boolean {
 }
 
 function verifyCredentials(email: string, password: string): boolean {
+  const cleanEmail = email.trim().toLowerCase();
   const entries = (process.env.DASHBOARD_USERS ?? "").split(",");
   return entries.some((entry) => {
     const colon = entry.indexOf(":");
     if (colon < 0) return false;
-    const e = entry.slice(0, colon).trim();
+    const e = entry.slice(0, colon).trim().toLowerCase();
     const stored = entry.slice(colon + 1).trim();
-    return e === email && verifyPassword(password, stored);
+    return e === cleanEmail && verifyPassword(password, stored);
   });
 }
 
@@ -81,8 +82,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verificación local primero — rechaza credenciales inválidas sin tocar Appwrite
-    if (!verifyCredentials(email, password)) {
+    // Verificación local primero
+    const cleanEmail = email.trim().toLowerCase();
+    console.log(`[LOGIN] Intento para: ${cleanEmail}`);
+    
+    if (!verifyCredentials(cleanEmail, password)) {
+      console.warn(`[LOGIN] Verificación local fallida para: ${cleanEmail}`);
       return NextResponse.json({ error: "Credenciales incorrectas" }, { status: 401 });
     }
 
@@ -90,14 +95,22 @@ export async function POST(request: Request) {
     let userId: string;
     let secret: string;
 
-    if (isProd) {
-      const clientIp =
-        request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
-        request.headers.get("x-real-ip") ??
-        "127.0.0.1";
-      ({ userId, secret } = await createSessionProd(email, password, clientIp));
-    } else {
-      ({ userId, secret } = await createSessionDev(email));
+    try {
+      if (isProd) {
+        const clientIp =
+          request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+          request.headers.get("x-real-ip") ??
+          "127.0.0.1";
+        console.log(`[LOGIN] Creando sesión PROD en Appwrite: ${cleanEmail} (IP: ${clientIp})`);
+        ({ userId, secret } = await createSessionProd(cleanEmail, password, clientIp));
+      } else {
+        console.log(`[LOGIN] Creando sesión DEV en Appwrite: ${cleanEmail}`);
+        ({ userId, secret } = await createSessionDev(cleanEmail));
+      }
+    } catch (error: any) {
+      console.error(`[LOGIN] Error en Appwrite para ${cleanEmail}: ${error.message}`);
+      // Si el error viene de Appwrite, lo devolvemos tal cual para debug
+      return NextResponse.json({ error: error.message }, { status: 401 });
     }
 
     const response = NextResponse.json({ success: true });
@@ -111,11 +124,13 @@ export async function POST(request: Request) {
     response.cookies.set("appwrite-session", secret, cookieOpts);
     response.cookies.set("appwrite-user-id", userId, cookieOpts);
 
+    console.log(`[LOGIN] Login exitoso: ${cleanEmail}`);
     return response;
   } catch (err: unknown) {
-    console.error("[auth/login] Error:", err);
-    const message = err instanceof Error ? err.message : "Error al iniciar sesión";
-    const status = message.includes("Rate limit") ? 429 : 401;
-    return NextResponse.json({ error: message }, { status });
+    console.error("[auth/login] Fatal Error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Error interno" },
+      { status: 500 }
+    );
   }
 }
