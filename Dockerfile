@@ -1,7 +1,11 @@
-FROM alpine:3.18
+FROM node:20-slim
 
-RUN echo "Build OK"
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install --legacy-peer-deps --ignore-scripts && echo "NPM INSTALL: OK"
 
 EXPOSE 3000
 
-CMD ["echo", "Container running"]
+CMD ["echo", "install only test"]
