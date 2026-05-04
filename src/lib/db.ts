@@ -419,3 +419,18 @@ export async function updateBotSettings(settings: Partial<BotSettings>): Promise
   
   await databases.updateDocument(DATABASE_ID, "bot_settings", SINGLETON_ID, data);
 }
+
+export async function searchProducts(query: string): Promise<any[]> {
+  try {
+    const result = await databases.listDocuments(
+      DATABASE_ID,
+      "products",
+      [Query.limit(200)]
+    );
+    const lowerQuery = query.toLowerCase();
+    return result.documents.filter(doc => doc.name.toLowerCase().includes(lowerQuery));
+  } catch (err) {
+    console.error("Error buscando productos:", err);
+    return [];
+  }
+}

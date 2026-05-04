@@ -5,6 +5,7 @@ import {
   insertMessage,
   getConversationById,
   getRecentHistory,
+  setMode,
 } from "../db";
 import { generateReply } from "../openrouter";
 import { getActiveSettings } from "../system-prompt";
@@ -144,6 +145,10 @@ export default async function handleMessage(
           
           // Notificar siempre al host
           await notifyImageHost(sock, pushName, phone);
+          
+          // Cambiar a modo humano para que ventas valide el pago/ID
+          await setMode(convo.id, "HUMAN");
+          console.log(`[bot] Conversación ${phone} cambiada a HUMAN tras recibir imagen`);
         } catch (e) {
           console.error("[bot] Error guardando imagen:", e);
         }
@@ -262,8 +267,9 @@ export default async function handleMessage(
       console.log(`[bot] → Enviado a ${phone}`);
 
       if (await isEscalation(reply)) {
-        console.log(`[bot] Escalacion detectada para ${phone} — notificando host`);
+        console.log(`[bot] Escalacion detectada para ${phone} — notificando host y cambiando a modo HUMAN`);
         await notifyHost(sock, pushName, phone, text);
+        await setMode(convo.id, "HUMAN");
         await sendPushToAll({
           title: "⚠️ Atención requerida",
           body: `${pushName}: "${text.slice(0, 100)}"`,
