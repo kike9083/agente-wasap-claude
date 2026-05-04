@@ -1,6 +1,15 @@
 # PROJECT_BRAIN.md — Agente WhatsApp Claude
 
-> **Instrucción para el agente:** Lee este archivo completo antes de hacer cualquier cambio. Al terminar tu sesión, actualiza la sección "Historial de Sesiones".
+> **Instrucción para el agente:** Lee este archivo completo antes de hacer cualquier cambio.
+>
+> ## ⚠️ REGLA OBLIGATORIA AL TERMINAR CADA SESIÓN
+> Antes de terminar tu respuesta, SIEMPRE debes:
+> 1. Correr `npx tsc --noEmit` y confirmar que hay 0 errores TypeScript.
+> 2. Verificar que `npm run dev:all` arranca sin errores fatales.
+> 3. Actualizar la sección "Historial de Sesiones" al final de este archivo con todo lo que cambiaste.
+> 4. Si usas PowerShell para borrar carpetas con corchetes `[x]` en el nombre, SIEMPRE usa `-LiteralPath` para evitar que PowerShell los interprete como wildcards (bug conocido de PS).
+>
+> No termines la sesión sin haber hecho estos 4 pasos. El usuario no debería tener que pedírtelo.
 
 ---
 
@@ -299,6 +308,7 @@ Cualquier ruta protegida → middleware.ts
 - **Búsqueda en conversaciones:** Filtro local en `ConversationList.tsx` por nombre, teléfono y preview del último mensaje.
 - **Estadísticas básicas:** Página `/stats` con tarjetas KPI (total convs, modo IA/HUMAN, mensajes hoy, promedio) y gráfico de barras de últimos 7 días. Ruta API `/api/stats`.
 - **Respuestas rápidas (Templates):** CRUD completo en `/api/templates` (GET/POST/DELETE). Templates guardados en `templates.json` local. En `ConversationPanel`, escribir `/` activa un dropdown de autocompletado. Gestión en `/settings`.
-- **Etiquetas por conversación:** Atributo `tags` (string JSON, máx 1000 chars) añadido a colección `conversations` vía `scripts/add-tags-attribute.ts`. API `/api/conversations/[id]/tags`. UI inline en `ConversationPanel` con colores por tipo (vip/urgente/reserva/etc) y sugerencias rápidas. Se sincronizan en tiempo real sin recargar.
+- **Etiquetas por conversación:** Atributo `tags` (string JSON, máx 1000 chars) añadido a colección `conversations` vía `scripts/add-tags-attribute.ts`. API en `src/app/api/conversations/[conversationId]/tags/route.ts`. UI inline en `ConversationPanel` con colores por tipo (vip/urgente/reserva/etc) y sugerencias rápidas. Se sincronizan en tiempo real sin recargar.
 - **Corrección seguridad cookies (login):** Bug de Next.js 15 donde `cookieStore.set()` no persistía. Solucionado usando `response.cookies.set()` en los Route Handlers de login y logout.
-- **TS limpio:** 0 errores de compilación tras todos los cambios.
+- **Bug slug Next.js resuelto:** Al crear la carpeta `[id]/tags` junto a `[conversationId]`, Next.js lanzaba error fatal `"cannot use different slug names"`. Solucionado eliminando `[id]` con PowerShell `-LiteralPath` (sin ese flag, PS interpreta `[id]` como glob y no borra nada). La carpeta correcta es siempre `[conversationId]`.
+- **TS limpio:** 0 errores de compilación. App arranca sin errores.
