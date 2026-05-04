@@ -30,13 +30,13 @@ interface ConnectionStatus {
 }
 
 export function ConnectionGate() {
-  const [status, setStatus] = useState<ConnectionStatus>({
-    status: "disconnected",
-  });
+  const [status, setStatus] = useState<ConnectionStatus>({ status: "disconnected" });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | undefined>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  // En mobile: "list" muestra la lista, "panel" muestra la conversación
+  const [mobileView, setMobileView] = useState<"list" | "panel">("list");
 
   useEffect(() => {
     const pollStatus = setInterval(async () => {
@@ -48,7 +48,6 @@ export function ConnectionGate() {
         console.error("Error polling status:", err);
       }
     }, 2000);
-
     return () => clearInterval(pollStatus);
   }, []);
 
@@ -56,9 +55,9 @@ export function ConnectionGate() {
     if (status.status !== "connected") {
       setSelectedConvId(undefined);
       setMessages([]);
+      setMobileView("list");
       return;
     }
-
     const pollConversations = setInterval(async () => {
       try {
         const res = await fetch("/api/conversations");
@@ -68,13 +67,11 @@ export function ConnectionGate() {
         console.error("Error polling conversations:", err);
       }
     }, 2000);
-
     return () => clearInterval(pollConversations);
   }, [status.status]);
 
   useEffect(() => {
     if (!selectedConvId || status.status !== "connected") return;
-
     const pollMessages = setInterval(async () => {
       try {
         const res = await fetch(`/api/messages/${selectedConvId}`);
@@ -84,9 +81,13 @@ export function ConnectionGate() {
         console.error("Error polling messages:", err);
       }
     }, 2000);
-
     return () => clearInterval(pollMessages);
   }, [selectedConvId, status.status]);
+
+  const handleSelectConversation = (id: string) => {
+    setSelectedConvId(id);
+    setMobileView("panel");
+  };
 
   const handleDisconnect = async () => {
     setLoading(true);
@@ -134,12 +135,11 @@ export function ConnectionGate() {
   const handleDeleteConversation = async () => {
     if (!selectedConvId) return;
     try {
-      await fetch(`/api/conversations/${selectedConvId}`, {
-        method: "DELETE",
-      });
+      await fetch(`/api/conversations/${selectedConvId}`, { method: "DELETE" });
       setSelectedConvId(undefined);
       setMessages([]);
       setConversations((prev) => prev.filter((c) => c.id !== selectedConvId));
+      setMobileView("list");
     } catch (err) {
       console.error("Error deleting conversation:", err);
     }
@@ -159,14 +159,27 @@ export function ConnectionGate() {
         loading={loading}
       />
       <div className="flex flex-1 overflow-hidden">
-        <div className="w-80 border-r border-gray-200 bg-white flex flex-col">
+        {/* Lista — ocupa toda la pantalla en mobile cuando mobileView="list" */}
+        <div
+          className={`
+            ${mobileView === "list" ? "flex" : "hidden"} md:flex
+            w-full md:w-80 border-r border-gray-200 bg-white flex-col shrink-0
+          `}
+        >
           <ConversationList
             conversations={conversations}
             selectedId={selectedConvId}
-            onSelect={setSelectedConvId}
+            onSelect={handleSelectConversation}
           />
         </div>
-        <div className="flex-1">
+
+        {/* Panel — ocupa toda la pantalla en mobile cuando mobileView="panel" */}
+        <div
+          className={`
+            ${mobileView === "panel" ? "flex" : "hidden"} md:flex
+            flex-1 flex-col overflow-hidden
+          `}
+        >
           {selectedConv ? (
             <ConversationPanel
               conversation={selectedConv}
@@ -174,10 +187,11 @@ export function ConnectionGate() {
               onModeChange={handleModeChange}
               onSendMessage={handleSendMessage}
               onDelete={handleDeleteConversation}
+              onBack={() => setMobileView("list")}
               loading={loading}
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-gray-500">
+            <div className="flex items-center justify-center h-full text-gray-400 text-sm">
               Selecciona una conversación
             </div>
           )}

@@ -40,7 +40,7 @@ export function QRScreen({ qrPng, status }: QRScreenProps) {
                 <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></div>
               </div>
             </div>
-            <img src={qrPng} alt="QR Code" className="w-80 h-80 mb-4" />
+            <img src={qrPng} alt="QR Code" className="w-56 h-56 sm:w-72 sm:h-72 md:w-80 md:h-80 mb-4" />
             <p className="text-sm text-gray-600 text-center">
               Escanea este código QR desde tu teléfono
             </p>
