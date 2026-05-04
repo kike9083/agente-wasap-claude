@@ -7,9 +7,9 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -H 0.0.0.0",
     "lint": "next lint",
     "start:bot": "tsx scripts/start-bot.ts",
     "dev:all": "concurrently --kill-others --names BOT,WEB --prefix-colors yellow,cyan \"npm run start:bot\" \"npm run dev\""
@@ -17,12 +17,15 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.16.0",
     "@tailwindcss/postcss": "^4.2.4",
+    "@types/pdfkit": "^0.17.6",
     "@whiskeysockets/baileys": "^6.7.0",
+    "appwrite": "^25.0.0",
     "better-sqlite3": "^11.0.0",
     "concurrently": "^8.2.2",
     "next": "^16.0.0",
     "node-appwrite": "^14.2.0",
     "openai": "^4.52.0",
+    "pdfkit": "^0.18.0",
     "pino": "^9.0.0",
     "qrcode": "^1.5.3",
     "qrcode-terminal": "^0.12.0",

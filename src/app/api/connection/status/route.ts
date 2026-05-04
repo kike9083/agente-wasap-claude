@@ -5,9 +5,12 @@ import QRCode from "qrcode";
 export async function GET(_req: NextRequest) {
   const state = await getConnectionState();
 
+  // WhatsApp expira el QR en ~20s. Si tiene más de 25s lo tratamos como obsoleto.
+  const qrAgeSec = Math.floor(Date.now() / 1000) - (state.updated_at ?? 0);
   const shouldShowQr =
     !!state.qr_string &&
-    (state.status === "qr" || state.status === "connecting");
+    (state.status === "qr" || state.status === "connecting") &&
+    qrAgeSec < 25;
 
   if (shouldShowQr && state.qr_string) {
     try {

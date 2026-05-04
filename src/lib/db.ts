@@ -26,6 +26,13 @@ export interface ConnectionState {
   updated_at: number;
 }
 
+export interface BotSettings {
+  system_prompt: string;
+  welcome_message: string;
+  human_timeout_hours: number;
+  llm_model?: string;
+}
+
 function docToConversation(doc: any): Conversation {
   return {
     id: doc.$id,
@@ -51,7 +58,7 @@ function docToMessage(doc: any): Message {
 export async function getOrCreateConversation(
   phone: string,
   name?: string
-): Promise<Conversation> {
+): Promise<{ conversation: Conversation; isNew: boolean }> {
   const result = await databases.listDocuments(
     DATABASE_ID,
     COLLECTIONS.conversations,
@@ -67,9 +74,9 @@ export async function getOrCreateConversation(
         doc.$id,
         { name }
       );
-      return { ...docToConversation(doc), name };
+      return { conversation: { ...docToConversation(doc), name }, isNew: false };
     }
-    return docToConversation(doc);
+    return { conversation: docToConversation(doc), isNew: false };
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -79,7 +86,7 @@ export async function getOrCreateConversation(
     ID.unique(),
     { phone, name: name ?? null, mode: "AI", createdAt: now }
   );
-  return docToConversation(doc);
+  return { conversation: docToConversation(doc), isNew: true };
 }
 
 export async function getConversationById(
@@ -102,6 +109,25 @@ export async function listConversations(): Promise<Conversation[]> {
     DATABASE_ID,
     COLLECTIONS.conversations,
     [Query.orderDesc("lastMessageAt"), Query.limit(100)]
+  );
+  return result.documents.map(docToConversation);
+}
+
+/**
+ * Devuelve conversaciones en modo HUMANO cuyo último mensaje es anterior a
+ * `cutoffTimestamp` (epoch en segundos). Usado por el AI timeout poller.
+ */
+export async function listStaleHumanConversations(
+  cutoffTimestamp: number
+): Promise<Conversation[]> {
+  const result = await databases.listDocuments(
+    DATABASE_ID,
+    COLLECTIONS.conversations,
+    [
+      Query.equal("mode", "HUMAN"),
+      Query.lessThan("lastMessageAt", cutoffTimestamp),
+      Query.limit(50),
+    ]
   );
   return result.documents.map(docToConversation);
 }
@@ -347,4 +373,27 @@ export async function clearRestartFlag(): Promise<void> {
       { requestedAt: null }
     );
   } catch {}
+}
+export async function getBotSettings(): Promise<BotSettings | null> {
+  try {
+    const doc = await databases.getDocument(DATABASE_ID, "bot_settings", SINGLETON_ID);
+    return {
+      system_prompt: doc.system_prompt || "",
+      welcome_message: doc.welcome_message || "",
+      human_timeout_hours: doc.human_timeout_hours || 24,
+      llm_model: doc.llm_model || "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function updateBotSettings(settings: Partial<BotSettings>): Promise<void> {
+  const data: Record<string, any> = {};
+  if (settings.system_prompt !== undefined) data.system_prompt = settings.system_prompt;
+  if (settings.welcome_message !== undefined) data.welcome_message = settings.welcome_message;
+  if (settings.human_timeout_hours !== undefined) data.human_timeout_hours = settings.human_timeout_hours;
+  if (settings.llm_model !== undefined) data.llm_model = settings.llm_model;
+  
+  await databases.updateDocument(DATABASE_ID, "bot_settings", SINGLETON_ID, data);
 }

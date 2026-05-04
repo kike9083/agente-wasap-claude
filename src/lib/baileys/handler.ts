@@ -1,4 +1,4 @@
-import { WASocket } from "@whiskeysockets/baileys";
+import { WASocket, downloadMediaMessage } from "@whiskeysockets/baileys";
 import { resolveJid } from "./client";
 import {
   getOrCreateConversation,
@@ -7,6 +7,20 @@ import {
   getRecentHistory,
 } from "../db";
 import { generateReply } from "../openrouter";
+import { getActiveSettings } from "../system-prompt";
+import OpenAI from "openai";
+import { storage, BUCKET_ID } from "../appwrite";
+import { ID } from "node-appwrite";
+import { InputFile } from "node-appwrite/file";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { generateQuotePDF } from "../generate-quote-pdf";
+
+const groqClient = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1",
+});
 
 const ESCALATION_PHRASES = [
   "conectarte con uno de nuestros hosts",
@@ -54,6 +68,33 @@ async function notifyHost(
   }
 }
 
+async function notifyImageHost(
+  sock: WASocket,
+  clientName: string,
+  clientPhone: string
+) {
+  const hostPhone = process.env.HOST_PHONE;
+  if (!hostPhone) return;
+
+  const resolvedPhone = resolveJid(clientPhone);
+  const isLid = resolvedPhone.endsWith("@lid");
+  const displayNumber = resolvedPhone
+    .replace(/@s\.whatsapp\.net$/, "")
+    .replace(/@lid$/, "");
+  const phoneLabel = isLid
+    ? `${displayNumber} (abre el dashboard para ver el contacto)`
+    : `+${displayNumber}`;
+
+  const jid = `${hostPhone}@s.whatsapp.net`;
+  const text = `[Jaiger House] Imagen recibida 📷\n\nEl cliente ${clientName} (${phoneLabel}) acaba de enviar una imagen.\nRevisa el dashboard para verla.`;
+
+  try {
+    await sock.sendMessage(jid, { text });
+  } catch (err) {
+    console.error("[bot] Error enviando notificacion de imagen:", err);
+  }
+}
+
 export default async function handleMessage(
   sock: WASocket,
   messages: any[],
@@ -73,20 +114,71 @@ export default async function handleMessage(
       const msgTimestamp = Number(msg.messageTimestamp ?? 0);
       if (type === "append" && now - msgTimestamp > 60) continue;
 
-      const text =
-        msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        msg.message?.imageMessage?.caption ||
-        null;
-
-      if (!text) continue;
-
-      const phone = resolveJid(remoteJid);
+      // Intentar extraer el número real si el remoteJid es un LID (a veces viene en participant)
+      const possibleJid = remoteJid.endsWith("@lid") && msg.key?.participant ? msg.key.participant : remoteJid;
+      const phone = resolveJid(possibleJid);
       const pushName = msg.pushName || "Usuario";
+
+      let text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || null;
+      let isImage = !!msg.message?.imageMessage;
+      let isAudio = !!msg.message?.audioMessage;
+
+      if (!text && !isImage && !isAudio) continue;
+
+      const { conversation: convo, isNew } = await getOrCreateConversation(phone, pushName);
+
+      // --- MANEJO DE IMAGENES ---
+      if (isImage) {
+        console.log(`[bot] ← Imagen recibida de ${phone}`);
+        try {
+          const buffer = await downloadMediaMessage(msg, 'buffer', { }, { logger: console as any, reuploadRequest: sock.updateMediaMessage });
+          // Subir a Appwrite Storage
+          const file = await storage.createFile(BUCKET_ID, ID.unique(), InputFile.fromBuffer(buffer as Buffer, "image.jpeg"));
+          const imageUrl = `[IMAGEN: ${file.$id}]`;
+          
+          await insertMessage(convo.id, "user", imageUrl + (text ? ` ${text}` : ""));
+          
+          // Notificar siempre al host
+          await notifyImageHost(sock, pushName, phone);
+        } catch (e) {
+          console.error("[bot] Error guardando imagen:", e);
+        }
+        continue; // Terminamos aquí, el bot NO responde a imágenes.
+      }
+
+      // --- MANEJO DE AUDIOS ---
+      if (isAudio) {
+        console.log(`[bot] ← Audio recibido de ${phone}`);
+        try {
+          const buffer = await downloadMediaMessage(msg, 'buffer', { }, { logger: console as any, reuploadRequest: sock.updateMediaMessage });
+          // Groq / OpenAI requiere un archivo con nombre válido para la transcripción
+          const tempFilePath = path.join(os.tmpdir(), `audio_${Date.now()}.ogg`);
+          fs.writeFileSync(tempFilePath, buffer as Buffer);
+
+          const transcription = await groqClient.audio.transcriptions.create({
+            file: fs.createReadStream(tempFilePath),
+            model: "whisper-large-v3",
+          });
+          text = transcription.text;
+          fs.unlinkSync(tempFilePath);
+
+          console.log(`[bot] Audio transcrito: "${text}"`);
+        } catch (e) {
+          console.error("[bot] Error transcribiendo audio:", e);
+          continue;
+        }
+      }
 
       console.log(`[bot] ← Mensaje de ${phone} (${pushName}): "${text}"`);
 
-      const convo = await getOrCreateConversation(phone, pushName);
+      // ── Mensaje de bienvenida (solo en el primer contacto) ──────────────
+      const activeSettings = await getActiveSettings();
+      if (isNew && activeSettings.welcome_message && !isImage) {
+        const greeting = activeSettings.welcome_message.replace("{name}", pushName.split(" ")[0]);
+        console.log(`[bot] Primer contacto de ${phone} — enviando bienvenida`);
+        await sock.sendMessage(remoteJid, { text: greeting });
+        await insertMessage(convo.id, "assistant", greeting);
+      }
       await insertMessage(convo.id, "user", text);
 
       const fresh = await getConversationById(convo.id);
@@ -105,7 +197,50 @@ export default async function handleMessage(
       console.log(`[bot] LLM respondió en ${elapsed}ms`);
 
       await insertMessage(convo.id, "assistant", reply);
-      await sock.sendMessage(remoteJid, { text: reply });
+
+      const cotizacionMatch = reply.match(/\[COTIZACION:\s*(\{[\s\S]*\})\s*\]/i);
+      const imageMatch = reply.match(/\[IMAGEN:\s*([a-zA-Z0-9_-]+)\]/i);
+
+      if (cotizacionMatch) {
+        try {
+          const quoteData = JSON.parse(cotizacionMatch[1]);
+          const pdfBuffer = await generateQuotePDF(quoteData);
+          const textWithoutMarker = reply.replace(cotizacionMatch[0], "").trim();
+
+          if (textWithoutMarker) {
+            await sock.sendMessage(remoteJid, { text: textWithoutMarker });
+          }
+          await sock.sendMessage(remoteJid, {
+            document: pdfBuffer,
+            mimetype: "application/pdf",
+            fileName: "Cotizacion_NovaMente_AI.pdf",
+          });
+          console.log(`[bot] PDF cotización enviado a ${phone}`);
+        } catch (e) {
+          console.error("[bot] Error generando PDF de cotización:", e);
+          await sock.sendMessage(remoteJid, {
+            text: reply.replace(cotizacionMatch[0], "").trim() || reply,
+          });
+        }
+      } else if (imageMatch) {
+        const fileId = imageMatch[1];
+        try {
+          const arrayBuffer = await storage.getFileDownload(BUCKET_ID, fileId);
+          const buffer = Buffer.from(arrayBuffer);
+          const textWithoutImage = reply.replace(imageMatch[0], "").trim();
+
+          await sock.sendMessage(remoteJid, {
+            image: buffer,
+            caption: textWithoutImage || undefined
+          });
+        } catch (e) {
+          console.error("[bot] Error descargando imagen para enviar:", e);
+          await sock.sendMessage(remoteJid, { text: reply });
+        }
+      } else {
+        await sock.sendMessage(remoteJid, { text: reply });
+      }
+      
       console.log(`[bot] → Enviado a ${phone}`);
 
       if (isEscalation(reply)) {

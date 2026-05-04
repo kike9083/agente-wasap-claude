@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { SYSTEM_PROMPT } from "./system-prompt";
+import { getActiveSettings } from "./system-prompt";
 
 const client = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
@@ -41,11 +41,12 @@ export async function generateReply(
     { role: "user", content: userMessage },
   ];
 
-  const model = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+  const activeSettings = await getActiveSettings();
+  const model = activeSettings.llm_model || process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
   const response = await client.chat.completions.create({
     model,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: activeSettings.system_prompt },
       ...messages,
     ],
     temperature: 0.7,

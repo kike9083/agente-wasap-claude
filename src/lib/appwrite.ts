@@ -1,4 +1,4 @@
-import { Client, Databases } from "node-appwrite";
+import { Client, Databases, Storage } from "node-appwrite";
 
 const client = new Client()
   .setEndpoint(process.env.APPWRITE_ENDPOINT!)
@@ -6,7 +6,9 @@ const client = new Client()
   .setKey(process.env.APPWRITE_API_KEY!);
 
 export const databases = new Databases(client);
+export const storage = new Storage(client);
 export const DATABASE_ID = process.env.APPWRITE_DATABASE_ID!;
+export const BUCKET_ID = "media";
 
 // IDs de colecciones
 export const COLLECTIONS = {

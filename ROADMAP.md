@@ -6,16 +6,16 @@ Mejoras pendientes organizadas por prioridad. Tachar con `[x]` al completar.
 
 ## 🔴 Crítico (necesario para producción)
 
-- [ ] **Login en el dashboard** — Cualquiera con la URL puede ver todas las conversaciones. Implementar autenticación básica (usuario/contraseña o JWT).
-- [ ] **Mensaje de bienvenida** — Primer contacto recibe saludo automático antes de que el bot procese la consulta.
-- [ ] **Timeout de regreso a modo IA** — Si el host no responde en X horas, el chat vuelve a modo IA automáticamente excusando al host y pasandole el correo al cliente donde puede escribirle al host para que le responda mas tarde ya sea por correo o por whatsapp.
+- [x] **Login en el dashboard** — Implementado con Appwrite Auth. Usuario: admin@jaigerhouse.com
+- [x] **Mensaje de bienvenida** — Enviado automáticamente en el primer contacto. Configurable con `WELCOME_MESSAGE` en `.env.local`.
+- [x] **Timeout de regreso a modo IA** — Si el host no responde en X horas (`HUMAN_TIMEOUT_HOURS`), el chat vuelve a modo IA automáticamente notificando al cliente.
 - [ ] **Deploy en servidor (VPS)** — Actualmente solo funciona con la PC encendida. Publicar en Railway, Render o VPS propio (~$5/mes) para que corra 24/7.
 
 ---
 
 ## 🟡 Muy útil para el día a día
 
-- [ ] **Manejo de audios e imágenes** — El 40%+ de los mensajes de WhatsApp son notas de voz o fotos. Transcribir audios con Whisper y describir imágenes con un modelo multimodal.
+- [x] **Manejo de audios e imágenes** — El bot transcribe notas de voz con Groq (Whisper) y descarga imágenes a un bucket de Appwrite notificando al host. Además, el bot puede enviar imágenes usando el formato `[IMAGEN: ID]`.
 - [ ] **Typing indicator** — El bot responde al instante, parece robot. Simular `sendPresenceUpdate("composing")` con un delay de 1–2s proporcional al largo de la respuesta.
 - [ ] **Notificación push en el browser** — El host necesita alerta visual en el dashboard cuando llega una escalación. Implementar Web Push o un badge/sonido en la pestaña.
 - [ ] **Búsqueda en conversaciones** — Con 50+ chats es imposible encontrar algo sin buscador. Agregar input de búsqueda en el panel izquierdo.
@@ -37,10 +37,10 @@ Mejoras pendientes organizadas por prioridad. Tachar con `[x]` al completar.
 
 Una sección dedicada en el dashboard donde el host pueda editar todas las opciones del bot sin tocar código ni variables de entorno.
 
-- [ ] **Mensaje de bienvenida** — Texto que se envía automáticamente al primer mensaje de un contacto nuevo. Editable desde la UI.
-- [ ] **Timeout de regreso a modo IA** — Número de horas de inactividad del host antes de que el chat vuelva a modo IA automáticamente.
-- [ ] **System prompt (instrucciones del bot)** — Editor de texto para modificar el comportamiento y personalidad del bot sin tocar `system-prompt.ts`.
-- [ ] **Modelo LLM** — Selector desplegable con los modelos disponibles en OpenRouter (gpt-4o-mini, claude-haiku, etc.).
+- [x] **Mensaje de bienvenida** — Texto que se envía automáticamente al primer mensaje de un contacto nuevo. Editable desde la UI.
+- [x] **Timeout de regreso a modo IA** — Número de horas de inactividad del host antes de que el chat vuelva a modo IA automáticamente.
+- [x] **System prompt (instrucciones del bot)** — Editor de texto para modificar el comportamiento y personalidad del bot sin tocar `system-prompt.ts`.
+- [x] **Modelo LLM** — Selector desplegable con los modelos disponibles en OpenRouter (solo visible para administradores).
 - [ ] **Número del host (HOST_PHONE)** — Campo para cambiar el número de notificaciones de escalación sin editar `.env.local`.
 - [ ] **Frases de escalación** — Lista editable de frases que disparan la notificación al host.
 - [ ] **Múltiples agentes humanos** — Gestión de usuarios del dashboard: agregar, editar y eliminar operadores con sus credenciales.

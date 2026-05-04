@@ -177,7 +177,84 @@ rm -rf auth/
 - ✅ Dashboard funcionando con datos de Appwrite
 - ✅ Outbox y restart_flag operando via Appwrite
 - ✅ TypeScript sin errores de compilación
-- 📋 Pendiente: implementar mejoras del ROADMAP.md
+- ✅ Skill `whatsapp-bot-builder-v2` creada en `C:\Users\soporte\.claude\skills\`
+- ✅ MCP de Appwrite corregido y funcional (ver abajo)
+- ✅ **Login implementado con Appwrite Auth** (usuario: admin@jaigerhouse.com)
+- ✅ **Mensaje de bienvenida automático** en primer contacto (configurable vía `WELCOME_MESSAGE` en .env.local)
+- ✅ **Timeout de regreso a modo IA** pasivo si el host inactivo (configurable vía `HUMAN_TIMEOUT_HOURS`)
+- ✅ **Soporte de Audios (Groq Whisper)** e **Imágenes (Appwrite Storage "media")**.
+- 📋 Siguiente: Deploy en VPS / EasyPanel
+
+---
+
+## MCP de Appwrite (configurado en Antigravity)
+
+**Config:** `C:\Users\soporte\.gemini\antigravity\mcp_config.json`
+
+El servidor se llama `appwrite` (único, sin flags). Versión instalada: `mcp_server_appwrite 0.4.1`.
+Registra todos los servicios: `TablesDB`, `Users`, `Teams`, `Storage`, `Functions`, etc.
+
+```json
+"appwrite": {
+  "command": "python",
+  "args": ["-m", "mcp_server_appwrite"],
+  "env": {
+    "APPWRITE_PROJECT_ID": "69f7a4cc001de1e8b9b7",
+    "APPWRITE_ENDPOINT": "https://varios-appwrite.fjueze.easypanel.host/v1"
+  }
+}
+```
+
+> ⚠️ Si el MCP `appwrite` no aparece disponible en la sesión, verificar con:
+> `python -m mcp_server_appwrite` (sin flags). Si falla, el módulo no está en el PATH de Python activo.
+
+---
+
+## Próximo paso detallado: Login con Appwrite Auth
+
+**Decisión tomada:** Usar Appwrite Auth (Client SDK `appwrite`) en lugar de credenciales en `.env.local`.
+
+**Razón:** El dashboard no tiene autenticación — cualquiera con la URL ve todas las conversaciones.
+El Client SDK permite login real con sesiones gestionadas por Appwrite, compatible con el roadmap de múltiples agentes.
+
+### Flujo planeado
+
+```
+Usuario → /login → POST /api/auth/login
+                       ↓
+                  appwrite Client SDK
+                  account.createEmailPasswordSession()
+                       ↓
+                  Cookie httpOnly: "session-secret"
+                       ↓
+                  Redirect → /dashboard (o /)
+```
+
+```
+Cualquier ruta protegida → middleware.ts
+                               ↓
+                          Lee cookie "session-secret"
+                          account.get() para validar
+                               ↓
+                     Válida → continúa  |  Inválida → /login
+```
+
+### Archivos a crear/modificar
+
+| Acción | Archivo |
+|---|---|
+| Instalar | paquete `appwrite` (Client SDK — distinto de `node-appwrite`) |
+| Crear | `src/lib/appwrite-client.ts` (cliente sin API Key) |
+| Crear | `src/app/login/page.tsx` |
+| Crear | `src/app/api/auth/login/route.ts` |
+| Crear | `src/app/api/auth/logout/route.ts` |
+| Crear | `middleware.ts` (raíz del proyecto) |
+| Modificar | `src/app/layout.tsx` (o página raíz para redirigir si no está autenticado) |
+
+### Paso previo con MCP (antes de codificar)
+1. Verificar que el MCP `appwrite` responde: buscar herramienta `users_list` o similar
+2. Activar Email/Password auth en Appwrite (si no está activado)
+3. Crear el usuario del dashboard vía MCP: email + contraseña segura
 
 ---
 
@@ -192,3 +269,24 @@ rm -rf auth/
 - Componentes actualizados: IDs de conversación cambiaron de `number` a `string`
 - Script `dev:all` corregido en package.json (antes era `start:all` con `npm run start`)
 - Creado `ROADMAP.md` con mejoras pendientes organizadas por prioridad
+
+### 2026-05-03 — Skill v2 + MCP Appwrite + inicio de Login
+- Creada skill `whatsapp-bot-builder-v2` en `C:\Users\soporte\.claude\skills\` con arquitectura Appwrite
+  - `SKILL.md` (14 pasos, arquitectura completa)
+  - `references/appwrite-setup.md`, `db-layer.md`, `bot-process.md`, `api-routes.md`
+- Corregido `mcp_config.json`: versión `0.4.1` no acepta flags (`--databases`, etc.)
+  - Reemplazadas 3 entradas separadas por un único servidor `appwrite` sin flags
+  - Requiere reinicio de Antigravity para activarse
+- Decisión de login: usar **Appwrite Auth + Client SDK** (no `.env.local`)
+  - Flujo diseñado: login page → API route → cookie httpOnly → middleware de protección
+- **Sesión terminó aquí:** MCP corregido, esperando reinicio de Antigravity para verificar y crear usuario
+
+### 2026-05-03 — Panel Dinámico, Roles, Auditoría de Seguridad y Multimedia
+- **Panel de Configuración y Dinamismo:** Migramos `system_prompt`, `welcome_message`, `human_timeout_hours` y `llm_model` de `.env` a la colección `bot_settings` en Appwrite. Implementada caché de 60s en el bot para no saturar lecturas.
+- **Roles y Usuarios:** Implementado control de acceso usando _Labels_ de Appwrite.
+  - Administrador: `admin@jaigerhouse.com` (Acceso total, selector de modelos LLM OpenRouter).
+  - Usuario: `test@jaigerhouse.com` (Gestión básica).
+- **Seguridad (Auditoría):** 
+  - Se descubrió una brecha crítica: `middleware.ts` en la raíz era ignorado por Next.js al existir la carpeta `src/`. Movido a `src/middleware.ts` para restaurar protección de rutas.
+  - Se corrigió un bug nativo de Next.js 15 en las Route Handlers de Login/Logout, inyectando las cookies directamente en el objeto `NextResponse` para evitar rebotes de inicio de sesión y el subsecuente Rate Limit 429 de Appwrite.
+- **Multimedia:** Soporte para recepción de audios (Groq/Whisper) e imágenes (Appwrite Storage). Cuando el cliente envía una imagen, el bot notifica instantáneamente al host para intervención humana.

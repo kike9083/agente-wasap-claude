@@ -9,13 +9,17 @@ import {
   setConnectionState,
   getRestartFlag,
   clearRestartFlag,
+  listStaleHumanConversations,
+  setMode,
 } from "../src/lib/db";
+import { getActiveSettings } from "../src/lib/system-prompt";
 
 const authDir = path.resolve(process.cwd(), "auth");
 
 let handle: Awaited<ReturnType<typeof startBot>> | null = null;
 let outboxInterval: NodeJS.Timeout | null = null;
 let restartCheckInterval: NodeJS.Timeout | null = null;
+let timeoutInterval: NodeJS.Timeout | null = null;
 let lastRestartFlag: number | null = null;
 
 async function start() {
@@ -26,6 +30,7 @@ async function start() {
 
     if (!outboxInterval) startOutboxPoller();
     if (!restartCheckInterval) startRestartChecker();
+    if (!timeoutInterval) startTimeoutPoller();
   } catch (err) {
     console.error("[bot] Error iniciando Baileys:", err);
     setTimeout(() => start(), 5000);
@@ -90,10 +95,38 @@ function startRestartChecker() {
   }, 2000);
 }
 
+function startTimeoutPoller() {
+  timeoutInterval = setInterval(async () => {
+    if (!handle) return;
+    try {
+      const activeSettings = await getActiveSettings();
+      const timeoutHours = activeSettings.human_timeout_hours || 24;
+      const timeoutSeconds = timeoutHours * 3600;
+      const now = Math.floor(Date.now() / 1000);
+      const cutoff = now - timeoutSeconds;
+      const staleConvos = await listStaleHumanConversations(cutoff);
+
+      for (const convo of staleConvos) {
+        console.log(`[bot] Timeout alcanzado para ${convo.phone}. Regresando a modo AI...`);
+        await setMode(convo.id, "AI");
+        
+        // Notify the user that the AI is back
+        const returnMsg = "El asesor humano no está disponible en este momento. He vuelto para seguir ayudándote. ¿En qué más te puedo asistir?";
+        const jid = resolveJid(convo.phone);
+        await handle.sock.sendMessage(jid, { text: returnMsg });
+        await insertMessage(convo.id, "assistant", returnMsg);
+      }
+    } catch (err) {
+      console.error("[bot] Error en timeout poller:", err);
+    }
+  }, 60000); // Revisar cada minuto
+}
+
 async function shutdown() {
   console.log("[bot] Apagando...");
   if (restartCheckInterval) clearInterval(restartCheckInterval);
   if (outboxInterval) clearInterval(outboxInterval);
+  if (timeoutInterval) clearInterval(timeoutInterval);
   clearReconnectTimer();
   if (handle) {
     try { handle.sock.end(undefined); } catch {}
