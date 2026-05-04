@@ -324,3 +324,23 @@ Cualquier ruta protegida → middleware.ts
 - **Base de Datos de Productos:** Se creó el script `scripts/seed-products.ts` para crear la colección `products` en Appwrite y popularla con los 109 productos únicos extraídos (SKU, nombre, precio, url).
 - **Function Calling (Herramientas LLM):** En lugar de meter el catálogo en el System Prompt, se modificó `src/lib/openrouter.ts` para proveerle al modelo la herramienta `searchAppwriteCatalog`. El LLM puede pausar su respuesta, llamar a la base de datos y obtener precios exactos.
 - **Algoritmo de Búsqueda Mejorado:** En `src/lib/db.ts` (`searchProducts`), se implementó un algoritmo robusto que normaliza texto (remueve acentos, pasa a minúsculas), aplica un *stemming* básico en español (quita plurales "s" y "es") y rankea resultados por coincidencia de múltiples palabras para búsquedas difusas exitosas.
+
+### 2026-05-04 — Compilación y Preparación para Deploy en EasyPanel
+- **Build de Producción:** Se ejecutó exitosamente `npm run build` en ~3.7s sin errores.
+- **TypeScript:** Verificado 0 errores con `npx tsc --noEmit`.
+- **Configuración EasyPanel:** Se creó archivo `easypanel.json` con:
+  - Repositorio: `https://github.com/kike9083/agente-wasap-claude`
+  - Rama: `master`
+  - Build: `npm install && npm run build`
+  - Start: `npm start` (escucha en 0.0.0.0:3000)
+  - Puerto web: 3000
+  - Health check: cada 30s con timeout de 5s
+  - Variables de entorno: todas las requeridas documentadas (vacías, para llenar en panel EasyPanel)
+- **Git:** Archivo `easypanel.json` pusheado a GitHub (commit: 74ad2c2).
+- **Próximo paso:** Usuario debe:
+  1. Acceder al panel de EasyPanel en `https://varios-appwrite.fjueze.easypanel.host` (o URL específica)
+  2. Crear nuevo servicio/aplicación
+  3. Conectar repositorio GitHub: `kike9083/agente-wasap-claude`
+  4. Seleccionar rama `master`
+  5. Llenar variables de entorno (OpenRouter key, Groq key, HOST_PHONE, etc.)
+  6. Confirmar deploy — EasyPanel hace `npm install`, `npm run build`, `npm start`
