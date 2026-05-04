@@ -283,6 +283,26 @@ export async function getConnectionState(): Promise<ConnectionState> {
   }
 }
 
+async function safeUpdate(collection: string, id: string, data: any, createData: any) {
+  try {
+    await databases.updateDocument(DATABASE_ID, collection, id, data);
+  } catch (err: any) {
+    if (err.code === 404) {
+      try {
+        await databases.createDocument(DATABASE_ID, collection, id, createData);
+      } catch (createErr: any) {
+        if (createErr.code === 409) {
+          await databases.updateDocument(DATABASE_ID, collection, id, data);
+        } else {
+          throw createErr;
+        }
+      }
+    } else {
+      throw err;
+    }
+  }
+}
+
 export async function setConnectionState(
   partial: Partial<ConnectionState>
 ): Promise<void> {
@@ -292,32 +312,14 @@ export async function setConnectionState(
   if ("qr_string" in partial) data.qrString = partial.qr_string ?? null;
   if ("phone" in partial) data.phone = partial.phone ?? null;
 
-  try {
-    await databases.updateDocument(
-      DATABASE_ID,
-      COLLECTIONS.connection_state,
-      SINGLETON_ID,
-      data
-    );
-  } catch (err: any) {
-    // Si el error es 404 (no existe), lo creamos.
-    // Si es otro error (ej: red), lo lanzamos para no intentar crear un duplicado.
-    if (err.code === 404) {
-      await databases.createDocument(
-        DATABASE_ID,
-        COLLECTIONS.connection_state,
-        SINGLETON_ID,
-        {
-          status: partial.status ?? "disconnected",
-          qrString: partial.qr_string ?? null,
-          phone: partial.phone ?? null,
-          updatedAt: now,
-        }
-      );
-    } else {
-      throw err;
-    }
-  }
+  const createData = {
+    status: partial.status ?? "disconnected",
+    qrString: partial.qr_string ?? null,
+    phone: partial.phone ?? null,
+    updatedAt: now,
+  };
+
+  await safeUpdate(COLLECTIONS.connection_state, SINGLETON_ID, data, createData);
 }
 
 export async function enqueueOutbox(
@@ -358,25 +360,12 @@ export async function markOutboxSent(id: string): Promise<void> {
 
 export async function requestRestart(): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
-  try {
-    await databases.updateDocument(
-      DATABASE_ID,
-      COLLECTIONS.restart_flag,
-      SINGLETON_ID,
-      { requestedAt: now }
-    );
-  } catch (err: any) {
-    if (err.code === 404) {
-      await databases.createDocument(
-        DATABASE_ID,
-        COLLECTIONS.restart_flag,
-        SINGLETON_ID,
-        { requestedAt: now }
-      );
-    } else {
-      throw err;
-    }
-  }
+  await safeUpdate(
+    COLLECTIONS.restart_flag,
+    SINGLETON_ID,
+    { requestedAt: now },
+    { requestedAt: now }
+  );
 }
 
 export async function getRestartFlag(): Promise<number | null> {
@@ -393,23 +382,12 @@ export async function getRestartFlag(): Promise<number | null> {
 }
 
 export async function clearRestartFlag(): Promise<void> {
-  try {
-    await databases.updateDocument(
-      DATABASE_ID,
-      COLLECTIONS.restart_flag,
-      SINGLETON_ID,
-      { requestedAt: null }
-    );
-  } catch (err: any) {
-    if (err.code === 404) {
-      await databases.createDocument(
-        DATABASE_ID,
-        COLLECTIONS.restart_flag,
-        SINGLETON_ID,
-        { requestedAt: null }
-      );
-    }
-  }
+  await safeUpdate(
+    COLLECTIONS.restart_flag,
+    SINGLETON_ID,
+    { requestedAt: null },
+    { requestedAt: null }
+  );
 }
 export async function getBotSettings(): Promise<BotSettings | null> {
   try {

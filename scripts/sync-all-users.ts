@@ -1,34 +1,53 @@
-
 import { Client, Users } from 'node-appwrite';
+import 'dotenv/config';
 
 async function syncAllUsers() {
+  const endpoint = process.env.APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1';
+  const projectId = process.env.APPWRITE_PROJECT_ID;
+  const apiKey = process.env.APPWRITE_API_KEY;
+
+  if (!projectId || !apiKey) {
+    console.error("Faltan variables de entorno (PROJECT_ID o API_KEY)");
+    process.exit(1);
+  }
+
   const client = new Client()
-    .setEndpoint('https://varios-appwrite.fjueze.easypanel.host/v1')
-    .setProject('69f7a4cc001de1e8b9b7')
-    .setKey('standard_033af4826754ee09802c67e8b8b985e1e606e08ffc51b200d597ab54fb0d20a47145d1d5b309dea232ffb0b15d18ae27b2786ccb93b9ad5e42a480382e024b0de9217229e73cb18ccb8bb33734290cf1d862f8c0d888cd13d54aee780a5cd0aa59c4978a164ebe81730dbdf952102d8c93f8c6bdd2723582a7f8bbd697c6b430');
+    .setEndpoint(endpoint)
+    .setProject(projectId)
+    .setKey(apiKey);
 
   const usersApi = new Users(client);
 
-  // Users from DASHBOARD_USERS env var
-  const usersToSync = [
-    { email: 'admin@jaigerhouse.com', password: 'Admin1234!' },
-    { email: 'test@jaigerhouse.com', password: 'Test1234!' }
-  ];
+  // Leer usuarios de la variable de entorno DASHBOARD_USERS
+  const rawUsers = (process.env.DASHBOARD_USERS ?? "").replace(/^["']|["']$/g, "").trim();
+  if (!rawUsers) {
+    console.log("No hay usuarios en DASHBOARD_USERS para sincronizar.");
+    return;
+  }
 
-  for (const u of usersToSync) {
+  const usersToSync = rawUsers.split(",").map(entry => {
+    const colon = entry.indexOf(":");
+    if (colon < 0) return null;
+    return {
+      email: entry.slice(0, colon).trim().toLowerCase(),
+      password: entry.slice(colon + 1).trim()
+    };
+  }).filter(u => u !== null && !u.password.startsWith("scrypt:")); // Solo sincronizamos si la pass es plana
+
+  for (const u of usersToSync as any[]) {
     try {
       const list = await usersApi.list();
       const existing = list.users.find(user => user.email === u.email);
 
       if (existing) {
         await usersApi.updatePassword(existing.$id, u.password);
-        console.log(`Updated password for ${u.email}`);
+        console.log(`✅ Password actualizada para ${u.email}`);
       } else {
         await usersApi.create('unique()', u.email, undefined, u.password);
-        console.log(`Created user ${u.email}`);
+        console.log(`✅ Usuario creado: ${u.email}`);
       }
     } catch (error: any) {
-      console.error(`Error with ${u.email}:`, error.message);
+      console.error(`❌ Error con ${u.email}:`, error.message);
     }
   }
 }

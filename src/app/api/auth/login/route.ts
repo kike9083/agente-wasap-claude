@@ -27,12 +27,17 @@ function verifyPassword(plain: string, stored: string): boolean {
 
 function verifyCredentials(email: string, password: string): boolean {
   const cleanEmail = email.trim().toLowerCase();
-  const entries = (process.env.DASHBOARD_USERS ?? "").split(",");
+  // Limpiar posibles comillas y espacios de la variable de entorno
+  const rawUsers = (process.env.DASHBOARD_USERS ?? "").replace(/^["']|["']$/g, "").trim();
+  if (!rawUsers) return false;
+  
+  const entries = rawUsers.split(",");
   return entries.some((entry) => {
-    const colon = entry.indexOf(":");
+    const cleanEntry = entry.trim();
+    const colon = cleanEntry.indexOf(":");
     if (colon < 0) return false;
-    const e = entry.slice(0, colon).trim().toLowerCase();
-    const stored = entry.slice(colon + 1).trim();
+    const e = cleanEntry.slice(0, colon).trim().toLowerCase();
+    const stored = cleanEntry.slice(colon + 1).trim();
     return e === cleanEmail && verifyPassword(password, stored);
   });
 }
@@ -84,7 +89,21 @@ export async function POST(request: Request) {
 
     // Verificación local primero
     const cleanEmail = email.trim().toLowerCase();
-    console.log(`[LOGIN] Intento para: ${cleanEmail}`);
+    const usersStr = process.env.DASHBOARD_USERS ?? "";
+    const entries = usersStr.split(",");
+    
+    const matchedEntry = entries.find(entry => {
+        const colon = entry.indexOf(":");
+        if (colon < 0) return false;
+        return entry.slice(0, colon).trim().toLowerCase() === cleanEmail;
+    });
+
+    if (!matchedEntry) {
+        console.log(`[LOGIN] ERROR: Email ${cleanEmail} no encontrado en DASHBOARD_USERS (${entries.length} usuarios configurados)`);
+        return NextResponse.json({ error: "Credenciales incorrectas" }, { status: 401 });
+    }
+
+    console.log(`[LOGIN] Email encontrado. Procediendo a verificar password y sesión en Appwrite...`);
     
     if (!verifyCredentials(cleanEmail, password)) {
       console.warn(`[LOGIN] Verificación local fallida para: ${cleanEmail}`);
