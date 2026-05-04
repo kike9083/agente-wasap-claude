@@ -1,8 +1,14 @@
-import { getBotSettings, BotSettings } from "./db";
+import { Client, Databases } from "node-appwrite";
+import "./env-loader"; // Carga variables desde .env.local
 
-// Fallback values
-export const DEFAULT_SYSTEM_PROMPT = `
-Eres el Asistente Virtual Oficial de "PENSA Muebles y Línea Blanca" (Dist. De Prod. Ext. y Nales, S.A.), una tienda líder en muebles y línea blanca en Panamá. 
+const client = new Client()
+  .setEndpoint(process.env.APPWRITE_ENDPOINT!)
+  .setProject(process.env.APPWRITE_PROJECT_ID!)
+  .setKey(process.env.APPWRITE_API_KEY!);
+
+const databases = new Databases(client);
+
+const prompt = `Eres el Asistente Virtual Oficial de "PENSA Muebles y Línea Blanca" (Dist. De Prod. Ext. y Nales, S.A.), una tienda líder en muebles y línea blanca en Panamá. 
 
 TU OBJETIVO: 
 Atender a los clientes de manera amable, profesional, servicial y persuasiva. Debes resolver sus dudas sobre productos, precios, envíos, métodos de pago y servicio técnico.
@@ -62,44 +68,10 @@ Para soporte técnico o repuestos, el cliente debe escribir exclusivamente al n�
 - Si el cliente saluda por primera vez y pregunta en qué le podemos ayudar, ofrécele las siguientes opciones principales: Consulta de Productos, Servicio Técnico o Repuestos, y Sucursales/Horarios.
 - Si el cliente pregunta por servicio técnico, dales directamente el número 6378-7570 y explícales las marcas autorizadas.
 - Si el cliente ya pagó por la web y reporta su compra, pídele los datos de confirmación (ID, correo, teléfono y ubicación).
-- ESCALACIÓN A LA ASESORA: Si el cliente hace una pregunta técnica que no puedes responder, pregunta por el inventario o catálogo de un mueble que no está en la lista de colchones, o si indica que YA COMPRÓ un producto y tiene alguna queja o problema de entrega, DEBES ESCALAR la conversación inmediatamente utilizando OBLIGATORIAMENTE la frase exacta: "Déjame conectarte con nuestra asesora de ventas".
-`.trim();
+- ESCALACIÓN A LA ASESORA: Si el cliente hace una pregunta técnica que no puedes responder, pregunta por el inventario o catálogo de un mueble que no está en la lista de colchones, o si indica que YA COMPRÓ un producto y tiene alguna queja o problema de entrega, DEBES ESCALAR la conversación inmediatamente utilizando OBLIGATORIAMENTE la frase exacta: "Déjame conectarte con nuestra asesora de ventas".`;
 
-export const DEFAULT_WELCOME_MESSAGE = "¡Hola {name}! Soy el asistente virtual de NovaMente AI. ¿En qué te puedo ayudar hoy?";
-export const DEFAULT_HUMAN_TIMEOUT_HOURS = 24;
-
-let cachedSettings: BotSettings | null = null;
-let lastFetchTime = 0;
-const CACHE_TTL = 60 * 1000; // 60 segundos
-
-export async function getActiveSettings(): Promise<BotSettings> {
-  const now = Date.now();
-  if (cachedSettings && now - lastFetchTime < CACHE_TTL) {
-    return cachedSettings;
-  }
-
-  const settings = await getBotSettings();
-  if (settings) {
-    cachedSettings = settings;
-    lastFetchTime = now;
-    return settings;
-  }
-
-  // Fallback if DB fails or is empty
-  return {
-    system_prompt: process.env.SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
-    welcome_message: process.env.WELCOME_MESSAGE ?? DEFAULT_WELCOME_MESSAGE,
-    human_timeout_hours: Number(process.env.HUMAN_TIMEOUT_HOURS) || DEFAULT_HUMAN_TIMEOUT_HOURS,
-    llm_model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
-    host_phone: process.env.HOST_PHONE || "",
-    escalation_phrases: JSON.stringify([
-      "conectarte con uno de nuestros hosts",
-      "derivarte con un asesor humano",
-      "déjame derivarte",
-      "déjame conectarte",
-      "conectarte con nuestra asesora de ventas",
-      "derivarte con nuestra asesora de ventas"
-    ]),
-  };
-}
-
+databases.updateDocument(process.env.APPWRITE_DATABASE_ID!, "bot_settings", "singleton", {
+  system_prompt: prompt
+})
+.then(() => console.log("✅ System prompt actualizado en Appwrite"))
+.catch(console.error);
