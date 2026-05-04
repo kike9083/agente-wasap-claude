@@ -28,6 +28,8 @@ const ESCALATION_PHRASES = [
   "derivarte con un asesor humano",
   "déjame derivarte",
   "déjame conectarte",
+  "conectarte con nuestra asesora de ventas",
+  "derivarte con nuestra asesora de ventas"
 ];
 
 function isEscalation(reply: string): boolean {
