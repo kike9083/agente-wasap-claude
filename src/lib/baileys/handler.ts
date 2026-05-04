@@ -23,18 +23,17 @@ const groqClient = new OpenAI({
   baseURL: "https://api.groq.com/openai/v1",
 });
 
-const ESCALATION_PHRASES = [
-  "conectarte con uno de nuestros hosts",
-  "derivarte con un asesor humano",
-  "déjame derivarte",
-  "déjame conectarte",
-  "conectarte con nuestra asesora de ventas",
-  "derivarte con nuestra asesora de ventas"
-];
-
-function isEscalation(reply: string): boolean {
+async function isEscalation(reply: string): Promise<boolean> {
+  const settings = await getActiveSettings();
+  let phrases: string[] = [];
+  try {
+    phrases = JSON.parse(settings.escalation_phrases || "[]");
+  } catch {
+    phrases = [];
+  }
+  
   const lower = reply.toLowerCase();
-  return ESCALATION_PHRASES.some((phrase) => lower.includes(phrase));
+  return phrases.some((phrase) => lower.includes(phrase.toLowerCase()));
 }
 
 async function notifyHost(
@@ -43,7 +42,8 @@ async function notifyHost(
   clientPhone: string,
   lastMessage: string
 ) {
-  const hostPhone = process.env.HOST_PHONE;
+  const settings = await getActiveSettings();
+  const hostPhone = settings.host_phone || process.env.HOST_PHONE;
   if (!hostPhone) return;
 
   const resolvedPhone = resolveJid(clientPhone);
@@ -76,7 +76,8 @@ async function notifyImageHost(
   clientName: string,
   clientPhone: string
 ) {
-  const hostPhone = process.env.HOST_PHONE;
+  const settings = await getActiveSettings();
+  const hostPhone = settings.host_phone || process.env.HOST_PHONE;
   if (!hostPhone) return;
 
   const resolvedPhone = resolveJid(clientPhone);
@@ -177,6 +178,8 @@ export default async function handleMessage(
       // ── Mensaje de bienvenida (solo en el primer contacto) ──────────────
       const activeSettings = await getActiveSettings();
       if (isNew && activeSettings.welcome_message && !isImage) {
+        await insertMessage(convo.id, "user", text); // Insertar primero el mensaje del usuario
+        
         const greeting = activeSettings.welcome_message.replace("{name}", pushName.split(" ")[0]);
         console.log(`[bot] Primer contacto de ${phone} — enviando bienvenida`);
         await sock.sendPresenceUpdate("composing", remoteJid);
@@ -184,6 +187,7 @@ export default async function handleMessage(
         await sock.sendPresenceUpdate("paused", remoteJid);
         await sock.sendMessage(remoteJid, { text: greeting });
         await insertMessage(convo.id, "assistant", greeting);
+        continue; // 🛑 Detener el bucle aquí para evitar que el LLM responda también
       }
       await insertMessage(convo.id, "user", text);
 
@@ -257,7 +261,7 @@ export default async function handleMessage(
       
       console.log(`[bot] → Enviado a ${phone}`);
 
-      if (isEscalation(reply)) {
+      if (await isEscalation(reply)) {
         console.log(`[bot] Escalacion detectada para ${phone} — notificando host`);
         await notifyHost(sock, pushName, phone, text);
         await sendPushToAll({

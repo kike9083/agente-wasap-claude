@@ -13,6 +13,8 @@ export default function SettingsPage() {
   const [welcomeMsg, setWelcomeMsg] = useState("");
   const [timeout, setTimeoutHours] = useState(24);
   const [llmModel, setLlmModel] = useState("");
+  const [hostPhone, setHostPhone] = useState("");
+  const [escalationPhrases, setEscalationPhrases] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [newTemplate, setNewTemplate] = useState("");
@@ -34,6 +36,16 @@ export default function SettingsPage() {
           setWelcomeMsg(data.settings.welcome_message || "");
           setTimeoutHours(data.settings.human_timeout_hours || 24);
           setLlmModel(data.settings.llm_model || "openai/gpt-4o-mini");
+          setHostPhone(data.settings.host_phone || "");
+          
+          let phrases = "";
+          try {
+            const parsed = JSON.parse(data.settings.escalation_phrases || "[]");
+            if (Array.isArray(parsed)) phrases = parsed.join("\n");
+          } catch {
+            phrases = "";
+          }
+          setEscalationPhrases(phrases);
         }
       })
       .finally(() => setLoading(false));
@@ -81,6 +93,8 @@ export default function SettingsPage() {
           welcome_message: welcomeMsg,
           human_timeout_hours: timeout,
           llm_model: isAdmin ? llmModel : undefined,
+          host_phone: isAdmin ? hostPhone : undefined,
+          escalation_phrases: isAdmin ? JSON.stringify(escalationPhrases.split("\n").map(s => s.trim()).filter(Boolean)) : undefined,
         }),
       });
       alert("Configuración guardada correctamente.");
@@ -201,9 +215,42 @@ export default function SettingsPage() {
                     <option value="qwen/qwen3.5-9b">Qwen 3.5 9B · $0.10/$0.15 por M tokens</option>
                     <option value="deepseek/deepseek-v4-flash">DeepSeek V4 Flash · $0.14/$0.28 por M tokens · Buen español</option>
                     <option value="google/gemma-4-31b-it">Google Gemma 4 31B · $0.13/$0.38 por M tokens</option>
-                    <option value="qwen/qwen3.6-35b-a3b">Qwen 3.6 35B · $0.16/$0.97 por M tokens</option>
+                    <option value="anthropic/claude-3-opus">Claude 3 Opus</option>
+                    <option value="meta-llama/llama-3-70b-instruct">Llama 3 70B</option>
                   </optgroup>
                 </select>
+              </div>
+
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Número del Host (Notificaciones de WhatsApp)
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Ingresa el número (con código de país, sin el `+` ni espacios) que recibirá las alertas de escalación, ej: 50762976372.
+                </p>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-md p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  value={hostPhone}
+                  onChange={(e) => setHostPhone(e.target.value)}
+                  placeholder="50712345678"
+                />
+              </div>
+
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Frases de Escalación
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Escribe las frases que, cuando el bot las use, dispararán una alerta al Host. Escribe una por línea.
+                </p>
+                <textarea
+                  className="w-full border border-gray-300 rounded-md p-3 text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  rows={6}
+                  value={escalationPhrases}
+                  onChange={(e) => setEscalationPhrases(e.target.value)}
+                  placeholder="déjame conectarte con un asesor..."
+                />
               </div>
             </div>
           )}

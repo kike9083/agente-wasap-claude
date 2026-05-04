@@ -31,6 +31,15 @@ export async function getActiveSettings(): Promise<BotSettings> {
     welcome_message: process.env.WELCOME_MESSAGE ?? DEFAULT_WELCOME_MESSAGE,
     human_timeout_hours: Number(process.env.HUMAN_TIMEOUT_HOURS) || DEFAULT_HUMAN_TIMEOUT_HOURS,
     llm_model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
+    host_phone: process.env.HOST_PHONE || "",
+    escalation_phrases: JSON.stringify([
+      "conectarte con uno de nuestros hosts",
+      "derivarte con un asesor humano",
+      "déjame derivarte",
+      "déjame conectarte",
+      "conectarte con nuestra asesora de ventas",
+      "derivarte con nuestra asesora de ventas"
+    ]),
   };
 }
 

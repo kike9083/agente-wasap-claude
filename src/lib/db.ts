@@ -32,6 +32,8 @@ export interface BotSettings {
   welcome_message: string;
   human_timeout_hours: number;
   llm_model?: string;
+  host_phone?: string;
+  escalation_phrases?: string;
 }
 
 function docToConversation(doc: any): Conversation {
@@ -398,6 +400,8 @@ export async function getBotSettings(): Promise<BotSettings | null> {
       welcome_message: doc.welcome_message || "",
       human_timeout_hours: doc.human_timeout_hours || 24,
       llm_model: doc.llm_model || "",
+      host_phone: doc.host_phone || "",
+      escalation_phrases: doc.escalation_phrases || "[]",
     };
   } catch {
     return null;
@@ -410,6 +414,8 @@ export async function updateBotSettings(settings: Partial<BotSettings>): Promise
   if (settings.welcome_message !== undefined) data.welcome_message = settings.welcome_message;
   if (settings.human_timeout_hours !== undefined) data.human_timeout_hours = settings.human_timeout_hours;
   if (settings.llm_model !== undefined) data.llm_model = settings.llm_model;
+  if (settings.host_phone !== undefined) data.host_phone = settings.host_phone;
+  if (settings.escalation_phrases !== undefined) data.escalation_phrases = settings.escalation_phrases;
   
   await databases.updateDocument(DATABASE_ID, "bot_settings", SINGLETON_ID, data);
 }

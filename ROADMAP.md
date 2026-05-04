@@ -16,17 +16,17 @@ Mejoras pendientes organizadas por prioridad. Tachar con `[x]` al completar.
 ## 🟡 Muy útil para el día a día
 
 - [x] **Manejo de audios e imágenes** — El bot transcribe notas de voz con Groq (Whisper) y descarga imágenes a un bucket de Appwrite notificando al host. Además, el bot puede enviar imágenes usando el formato `[IMAGEN: ID]`.
-- [ ] **Typing indicator** — El bot responde al instante, parece robot. Simular `sendPresenceUpdate("composing")` con un delay de 1–2s proporcional al largo de la respuesta.
-- [ ] **Notificación push en el browser** — El host necesita alerta visual en el dashboard cuando llega una escalación. Implementar Web Push o un badge/sonido en la pestaña.
-- [ ] **Búsqueda en conversaciones** — Con 50+ chats es imposible encontrar algo sin buscador. Agregar input de búsqueda en el panel izquierdo.
-- [ ] **Estadísticas básicas** — Página con: chats por día, tasa de escalación, tiempo promedio de respuesta del bot, modelos usados.
+- [x] **Typing indicator** — El bot responde al instante, parece robot. Simular `sendPresenceUpdate("composing")` con un delay de 1–2s proporcional al largo de la respuesta.
+- [x] **Notificación push en el browser** — El host necesita alerta visual en el dashboard cuando llega una escalación. Implementar Web Push o un badge/sonido en la pestaña.
+- [x] **Búsqueda en conversaciones** — Con 50+ chats es imposible encontrar algo sin buscador. Agregar input de búsqueda en el panel izquierdo.
+- [x] **Estadísticas básicas** — Página con: chats por día, tasa de escalación, tiempo promedio de respuesta del bot, modelos usados.
 
 ---
 
 ## 🟢 Diferencial para cobrar más
 
-- [ ] **Respuestas rápidas (templates)** — El host teclea `/` y ve frases pre-guardadas para enviar en un clic. Configurable desde el dashboard.
-- [ ] **Etiquetas por conversación** — Marcar chats como "reserva", "consulta", "queja", "VIP", etc. Filtrar por etiqueta en la lista.
+- [x] **Respuestas rápidas (templates)** — El host teclea `/` y ve frases pre-guardadas para enviar en un clic. Configurable desde el dashboard.
+- [x] **Etiquetas por conversación** — Marcar chats como "reserva", "consulta", "queja", "VIP", etc. Filtrar por etiqueta en la lista.
 - [ ] **Múltiples agentes humanos** — Actualmente solo un host puede responder. Permitir que un equipo comparta el dashboard con roles distintos.
 - [ ] **Historial exportable** — Descargar conversaciones en PDF o CSV para reportes o auditorías.
 - [ ] **Integración con calendario/reservas** — El bot consulta disponibilidad real en tiempo real (Google Calendar, Notion, Airtable, etc.).
@@ -41,12 +41,12 @@ Una sección dedicada en el dashboard donde el host pueda editar todas las opcio
 - [x] **Timeout de regreso a modo IA** — Número de horas de inactividad del host antes de que el chat vuelva a modo IA automáticamente.
 - [x] **System prompt (instrucciones del bot)** — Editor de texto para modificar el comportamiento y personalidad del bot sin tocar `system-prompt.ts`.
 - [x] **Modelo LLM** — Selector desplegable con los modelos disponibles en OpenRouter (solo visible para administradores).
-- [ ] **Número del host (HOST_PHONE)** — Campo para cambiar el número de notificaciones de escalación sin editar `.env.local`.
-- [ ] **Frases de escalación** — Lista editable de frases que disparan la notificación al host.
+- [x] **Número del host (HOST_PHONE)** — Campo para cambiar el número de notificaciones de escalación sin editar `.env.local`.
+- [x] **Frases de escalación** — Lista editable de frases que disparan la notificación al host.
 - [ ] **Múltiples agentes humanos** — Gestión de usuarios del dashboard: agregar, editar y eliminar operadores con sus credenciales.
 - [ ] **Integración con calendario/reservas** — Configurar credenciales y URL del calendario externo (Google Calendar, Notion, Airtable) que el bot puede consultar.
-- [ ] **Respuestas rápidas (templates)** — CRUD de frases predefinidas que el host puede enviar con un clic en modo humano.
-- [ ] **Etiquetas** — Gestión de etiquetas disponibles para clasificar conversaciones.
+- [x] **Respuestas rápidas (templates)** — CRUD de frases predefinidas que el host puede enviar con un clic en modo humano.
+- [x] **Etiquetas** — Gestión de etiquetas disponibles para clasificar conversaciones.
 
 ---
 
