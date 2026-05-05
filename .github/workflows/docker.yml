@@ -31,6 +31,19 @@ jobs:
             echo "tag=omni" >> $GITHUB_OUTPUT
           fi
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install deps (debug)
+        run: npm install --legacy-peer-deps --include=optional
+
+      - name: Next.js build (debug)
+        env:
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+        run: npm run build
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
