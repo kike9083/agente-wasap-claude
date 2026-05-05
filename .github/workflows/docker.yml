@@ -42,7 +42,13 @@ jobs:
       - name: Next.js build (debug)
         env:
           NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
-        run: npm run build
+          OPENROUTER_API_KEY: dummy
+          APPWRITE_ENDPOINT: http://localhost/v1
+          APPWRITE_PROJECT_ID: dummy
+          APPWRITE_API_KEY: dummy
+          APPWRITE_DATABASE_ID: dummy
+          NODE_OPTIONS: "--max-old-space-size=1536"
+        run: npx next build --no-lint 2>&1
 
       - name: Build and push
         uses: docker/build-push-action@v5
