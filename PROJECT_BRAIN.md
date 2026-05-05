@@ -412,3 +412,17 @@ Cualquier ruta protegida → middleware.ts
 - Documento de referencia creado: `OMNICHANNEL_PLAN.md`.
 - Se decidió mantener la arquitectura en este mismo proyecto por eficiencia, pero separando la lógica por canales.
 - Se adoptó la estrategia de **Prompts Híbridos**: un núcleo de conocimiento común + una capa de personalidad/estilo específica para cada plataforma (WhatsApp, Instagram, etc.).
+
+### 2026-05-05 — Implementación completa Omnicanal (branch `feature/omnichannel`)
+
+- **Commit:** `3f5900f` — 17 archivos, 895 inserciones, 0 errores TypeScript
+- **DB schema:** tipo `Platform` (`whatsapp|telegram|instagram|facebook|webchat`), campo `externalId`, `phone` ahora nullable, índice compuesto `(platform, externalId)` en colección `conversations` y campo `platform` en `outbox`.
+- **Script de migración:** `scripts/migrate-omnichannel.ts` — corre UNA VEZ: agrega atributos, migra docs existentes (`externalId = phone`), crea índice. Correr con `npm run migrate:omnichannel`.
+- **Cerebro central:** `src/lib/core/message-processor.ts` — lógica LLM, escalación, push extraída de handler.ts. Recibe `sendReply` como callback para ser agnóstico a la plataforma.
+- **handler.ts refactorizado:** solo código específico de WhatsApp (JID, imágenes, audio, typing). Llama a `processMessage`.
+- **Telegram:** `scripts/start-telegram.ts` via Telegraf. Activo si `TELEGRAM_BOT_TOKEN` está en env. Sale limpiamente si no.
+- **WebChat:** `src/app/api/chat/route.ts` (POST `{sessionId, name, message}`) + widget embeddable `public/chat-widget.js`.
+- **Dashboard:** `ConversationList.tsx` tiene tabs All/WA/TG/IG/Web con badges de color. Solo muestra tabs para plataformas activas.
+- **package.json:** scripts `start:telegram`, `migrate:omnichannel`, `dev:all` y `start:all` incluyen proceso TG.
+- **Fix auth (misma sesión):** `src/app/api/auth/login/route.ts` simplificado a pure Appwrite (sin `DASHBOARD_USERS`). Usa `data.$id` (no `data.secret`) para Appwrite 1.8.
+- **PRÓXIMO PASO:** Correr migración en producción (`npm run migrate:omnichannel`), luego mergear a `master` y hacer redeploy en EasyPanel. Para activar Telegram: agregar `TELEGRAM_BOT_TOKEN` en EasyPanel.
