@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, FormEvent, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const from = searchParams.get("from") ?? "/";
 
@@ -30,8 +29,7 @@ function LoginForm() {
         throw new Error(data.error ?? "Error al iniciar sesión");
       }
 
-      router.push(from);
-      router.refresh();
+      window.location.href = from;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
