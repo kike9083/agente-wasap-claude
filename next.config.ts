@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
     "pino",
     "node-appwrite",
     "web-push",
+    "openai",
+    "telegraf",
   ],
 };
 
