@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   try {
     const msg = await insertMessage(conversationId, role, content);
 
-    if (role === "human") {
+    if (role === "human" && convo.phone) {
       await enqueueOutbox(conversationId, convo.phone, content);
     }
 

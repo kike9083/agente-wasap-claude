@@ -13,7 +13,9 @@ interface Message {
 
 interface Conversation {
   id: string;
-  phone: string;
+  platform: "whatsapp" | "telegram" | "instagram" | "facebook" | "webchat";
+  externalId: string;
+  phone: string | null;
   name: string | null;
   mode: "AI" | "HUMAN";
   tags: string[];
@@ -125,7 +127,7 @@ export function ConversationPanel({
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`¿Borrar conversación con ${conversation.name || formatPhone(conversation.phone)}?`)) return;
+    if (!window.confirm(`¿Borrar conversación con ${conversation.name || formatPhone(conversation.phone ?? conversation.externalId)}?`)) return;
     setDeleteLoading(true);
     try { await onDelete(); } finally { setDeleteLoading(false); }
   };
@@ -167,9 +169,9 @@ export function ConversationPanel({
         )}
         <div className="flex-1 min-w-0">
           <h2 className="font-semibold text-gray-900 text-sm md:text-base truncate">
-            {conversation.name || conversation.phone}
+            {conversation.name || formatPhone(conversation.phone ?? conversation.externalId)}
           </h2>
-          <p className="text-xs text-gray-500 truncate">{formatPhone(conversation.phone)}</p>
+          <p className="text-xs text-gray-500 truncate">{formatPhone(conversation.phone ?? conversation.externalId)}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <ModeToggle mode={conversation.mode} onChange={handleModeChange} loading={modeLoading} />

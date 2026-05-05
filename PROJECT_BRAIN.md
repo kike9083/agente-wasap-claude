@@ -313,6 +313,13 @@ Cualquier ruta protegida → middleware.ts
 - **Bug slug Next.js resuelto:** Al crear la carpeta `[id]/tags` junto a `[conversationId]`, Next.js lanzaba error fatal `"cannot use different slug names"`. Solucionado eliminando `[id]` con PowerShell `-LiteralPath` (sin ese flag, PS interpreta `[id]` como glob y no borra nada). La carpeta correcta es siempre `[conversationId]`.
 - **System Prompt y Escalación a Ventas:** Se creó un System Prompt robusto basado en las respuestas rápidas (PENSA Muebles). Se configuró explícitamente la escalación cuando el cliente ya compró o hay dudas. Se actualizó el `HOST_PHONE` a `50762976372` (asesora de ventas) en el `.env.local` y se agregaron las frases exactas al arreglo de `ESCALATION_PHRASES` en `handler.ts`.
 - **Configuración Dinámica Completa:** Se eliminó la dependencia de variables de entorno y arrays estáticos para el comportamiento del bot. Se crearon los atributos `host_phone` y `escalation_phrases` en la colección `bot_settings` de Appwrite. Se modificó el dashboard (`settings/page.tsx`) para permitir al administrador editar el número del host y las frases de escalación. Se modificaron `handler.ts` y `system-prompt.ts` para que el bot consuma esta configuración en tiempo real sin requerir reinicios.
+
+---
+
+## 🚀 Futuro: Omnicanalidad
+
+- [ ] **Expansión Multi-plataforma** — Implementar el plan detallado en [OMNICHANNEL_PLAN.md](./OMNICHANNEL_PLAN.md) para soportar Telegram, Instagram y WebChat desde este mismo proyecto.
+
 ### 2026-05-04 — Automatización de Modo Humano para Validación de Pago
 - **Escalación por envío de Documentación:** Se modificó `handler.ts` para que, cuando el usuario envíe una imagen, además de notificar al asesor, el bot cambie automáticamente el estado de la conversación a modo **HUMAN**. De esta manera se evita que la IA responda a mensajes subsiguientes (como texto con la dirección) mientras ventas valida la foto del ID o comprobante.
 - **Cambio a modo HUMAN en todas las escalaciones:** Se actualizó la función `isEscalation` en `handler.ts` para que cualquier escalación detectada (incluyendo las reglas del sistema que dicen explícitamente escalar si el cliente envía sus datos de confirmación de pago) fuerce también un cambio a modo **HUMAN**, asegurando que el asesor sea el que confirme los datos y no la IA.
@@ -399,3 +406,9 @@ Cualquier ruta protegida → middleware.ts
   - `whatsapp-bot-builder-v3` — versión completa con auth, push notifications, config dinámica, deploy en EasyPanel
   - `easypanel-deploy-from-github` — guía de deploy EasyPanel via API tRPC con todos los endpoints confirmados
 - **Estado actual:** Login funciona ✅. Dashboard accesible ✅. Bot esperando QR de WhatsApp.
+
+### 2026-05-05 — Diseño de Estrategia Omnicanal
+- Se diseñó un plan profesional para expandir el bot a Telegram, Instagram, Facebook y WebChat.
+- Documento de referencia creado: `OMNICHANNEL_PLAN.md`.
+- Se decidió mantener la arquitectura en este mismo proyecto por eficiencia, pero separando la lógica por canales.
+- Se adoptó la estrategia de **Prompts Híbridos**: un núcleo de conocimiento común + una capa de personalidad/estilo específica para cada plataforma (WhatsApp, Instagram, etc.).

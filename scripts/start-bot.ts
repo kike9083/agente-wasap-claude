@@ -50,7 +50,7 @@ function startOutboxPoller() {
   outboxInterval = setInterval(async () => {
     if (!handle) return;
     try {
-      const pending = await getPendingOutbox(20);
+      const pending = await getPendingOutbox("whatsapp", 20);
       for (const item of pending) {
         try {
           const jid = resolveJid(item.phone);
@@ -107,13 +107,15 @@ function startTimeoutPoller() {
       const staleConvos = await listStaleHumanConversations(cutoff);
 
       for (const convo of staleConvos) {
-        console.log(`[bot] Timeout alcanzado para ${convo.phone}. Regresando a modo AI...`);
+        console.log(`[bot] Timeout alcanzado para ${convo.phone ?? convo.id}. Regresando a modo AI...`);
         await setMode(convo.id, "AI");
-        
-        // Notify the user that the AI is back
+
         const returnMsg = "El asesor humano no está disponible en este momento. He vuelto para seguir ayudándote. ¿En qué más te puedo asistir?";
-        const jid = resolveJid(convo.phone);
-        await handle.sock.sendMessage(jid, { text: returnMsg });
+        if (convo.phone) {
+          const jid = resolveJid(convo.phone);
+          await handle.sock.sendMessage(jid, { text: returnMsg });
+        }
+        await insertMessage(convo.id, "assistant", returnMsg);
         await insertMessage(convo.id, "assistant", returnMsg);
       }
     } catch (err) {

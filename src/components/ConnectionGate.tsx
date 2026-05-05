@@ -8,7 +8,9 @@ import { ConversationPanel } from "./ConversationPanel";
 
 interface Conversation {
   id: string;
-  phone: string;
+  platform: "whatsapp" | "telegram" | "instagram" | "facebook" | "webchat";
+  externalId: string;
+  phone: string | null;
   name: string | null;
   mode: "AI" | "HUMAN";
   last_message_at: number | null;

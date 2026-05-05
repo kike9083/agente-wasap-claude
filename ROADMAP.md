@@ -61,3 +61,9 @@ Una sección dedicada en el dashboard donde el host pueda editar todas las opcio
 7. Manejo de audios/imágenes
 8. Búsqueda + estadísticas
 9. Templates + etiquetas
+
+---
+
+## 🚀 Futuro: Omnicanalidad
+
+- [ ] **Expansión Multi-plataforma** — Implementar el plan detallado en [OMNICHANNEL_PLAN.md](./OMNICHANNEL_PLAN.md) para soportar Telegram, Instagram y WebChat desde este mismo proyecto.

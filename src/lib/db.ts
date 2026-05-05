@@ -1,9 +1,13 @@
 import { ID, Query } from "node-appwrite";
 import { databases, DATABASE_ID, COLLECTIONS, SINGLETON_ID } from "./appwrite";
 
+export type Platform = "whatsapp" | "telegram" | "instagram" | "facebook" | "webchat";
+
 export interface Conversation {
   id: string;
-  phone: string;
+  platform: Platform;
+  externalId: string;
+  phone: string | null;
   name: string | null;
   mode: "AI" | "HUMAN";
   last_message_at: number | null;
@@ -41,7 +45,9 @@ function docToConversation(doc: any): Conversation {
   try { tags = JSON.parse(doc.tags ?? "[]"); } catch { tags = []; }
   return {
     id: doc.$id,
-    phone: doc.phone,
+    platform: (doc.platform ?? "whatsapp") as Platform,
+    externalId: doc.externalId ?? doc.phone ?? "",
+    phone: doc.phone ?? null,
     name: doc.name ?? null,
     mode: (doc.mode ?? "AI") as "AI" | "HUMAN",
     last_message_at: doc.lastMessageAt ?? null,
@@ -62,24 +68,25 @@ function docToMessage(doc: any): Message {
 }
 
 export async function getOrCreateConversation(
-  phone: string,
-  name?: string
+  platform: Platform,
+  externalId: string,
+  name?: string,
+  phone?: string
 ): Promise<{ conversation: Conversation; isNew: boolean }> {
   const result = await databases.listDocuments(
     DATABASE_ID,
     COLLECTIONS.conversations,
-    [Query.equal("phone", phone), Query.limit(1)]
+    [
+      Query.equal("platform", platform),
+      Query.equal("externalId", externalId),
+      Query.limit(1),
+    ]
   );
 
   if (result.documents.length > 0) {
     const doc = result.documents[0];
     if (name && name !== doc.name) {
-      await databases.updateDocument(
-        DATABASE_ID,
-        COLLECTIONS.conversations,
-        doc.$id,
-        { name }
-      );
+      await databases.updateDocument(DATABASE_ID, COLLECTIONS.conversations, doc.$id, { name });
       return { conversation: { ...docToConversation(doc), name }, isNew: false };
     }
     return { conversation: docToConversation(doc), isNew: false };
@@ -90,7 +97,14 @@ export async function getOrCreateConversation(
     DATABASE_ID,
     COLLECTIONS.conversations,
     ID.unique(),
-    { phone, name: name ?? null, mode: "AI", createdAt: now }
+    {
+      platform,
+      externalId,
+      phone: phone ?? null,
+      name: name ?? null,
+      mode: "AI",
+      createdAt: now,
+    }
   );
   return { conversation: docToConversation(doc), isNew: true };
 }
@@ -110,12 +124,10 @@ export async function getConversationById(
   }
 }
 
-export async function listConversations(): Promise<Conversation[]> {
-  const result = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.conversations,
-    [Query.orderDesc("lastMessageAt"), Query.limit(100)]
-  );
+export async function listConversations(platform?: Platform): Promise<Conversation[]> {
+  const queries: any[] = [Query.orderDesc("lastMessageAt"), Query.limit(100)];
+  if (platform) queries.push(Query.equal("platform", platform));
+  const result = await databases.listDocuments(DATABASE_ID, COLLECTIONS.conversations, queries);
   return result.documents.map(docToConversation);
 }
 
@@ -336,11 +348,13 @@ export async function enqueueOutbox(
   });
 }
 
-export async function getPendingOutbox(limit = 20): Promise<
-  Array<{ id: string; conversation_id: string; phone: string; content: string }>
-> {
+export async function getPendingOutbox(
+  platform: Platform = "whatsapp",
+  limit = 20
+): Promise<Array<{ id: string; conversation_id: string; phone: string; content: string; platform: Platform }>> {
   const result = await databases.listDocuments(DATABASE_ID, COLLECTIONS.outbox, [
     Query.equal("status", "pending"),
+    Query.equal("platform", platform),
     Query.orderAsc("createdAt"),
     Query.limit(limit),
   ]);
@@ -349,7 +363,24 @@ export async function getPendingOutbox(limit = 20): Promise<
     conversation_id: doc.conversationId,
     phone: doc.phone,
     content: doc.content,
+    platform: (doc.platform ?? "whatsapp") as Platform,
   }));
+}
+
+export async function enqueueOutboxForPlatform(
+  conversationId: string,
+  externalId: string,
+  content: string,
+  platform: Platform
+): Promise<void> {
+  await databases.createDocument(DATABASE_ID, COLLECTIONS.outbox, ID.unique(), {
+    conversationId,
+    phone: externalId,
+    content,
+    status: "pending",
+    platform,
+    createdAt: Math.floor(Date.now() / 1000),
+  });
 }
 
 export async function markOutboxSent(id: string): Promise<void> {
