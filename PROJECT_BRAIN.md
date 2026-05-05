@@ -389,3 +389,13 @@ Cualquier ruta protegida → middleware.ts
   - `https://varios-agente-wasap.fjueze.easypanel.host/login` → HTTP 200 ✅
   - `https://varios-agente-wasap.fjueze.easypanel.host/api/connection/status` → HTTP 200 ✅
 - **PRÓXIMO PASO:** Escanear el QR de WhatsApp desde el dashboard para conectar el bot. La sesión de Baileys se guarda en `/app/auth/` dentro del container (volumen efímero — si el container se reinicia hay que escanear de nuevo).
+
+### 2026-05-04 — Fix login + Skills v3 y EasyPanel
+
+- **Bug root cause resuelto:** `appwrite-session` cookie llegaba vacía. Appwrite 1.8.0 devuelve `secret: ""` en `/account/sessions/email`. El ID real de la sesión está en `data.$id`. Fix: `src/app/api/auth/login/route.ts` línea 76 → `data.$id` en vez de `data.secret`. Commit `21e831d`.
+- **Verificado post-fix:** `appwrite-session=69f95a27a11ee0fd3d3a` (valor real) ✅. Login redirige al dashboard correctamente ✅.
+- **EasyPanel API key:** `Authorization: Bearer <KEY>` — NO `x-api-key`. Con `x-api-key` algunos endpoints retornan UNAUTHORIZED aunque otros acepten.
+- **Skills creados:**
+  - `whatsapp-bot-builder-v3` — versión completa con auth, push notifications, config dinámica, deploy en EasyPanel
+  - `easypanel-deploy-from-github` — guía de deploy EasyPanel via API tRPC con todos los endpoints confirmados
+- **Estado actual:** Login funciona ✅. Dashboard accesible ✅. Bot esperando QR de WhatsApp.
