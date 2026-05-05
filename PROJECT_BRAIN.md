@@ -375,7 +375,7 @@ Cualquier ruta protegida → middleware.ts
 - **API EasyPanel (endpoints confirmados):**
   - `services.app.createService` — crear servicio tipo app
   - `services.app.updateSourceGithub` — configurar repo GitHub
-  - `services.app.updateBuild` — configurar build (nota: muestra `null` en inspect pero auto-detecta Dockerfile)
+  - `services.app.updateBuild` — configurar build. **IMPORTANTE: `type` y `file` deben ir dentro de un sub-objeto `build`**: `{"build":{"type":"dockerfile","file":"Dockerfile"}}`. Si se pasan a nivel raíz, la API acepta pero no guarda.
   - `services.app.updateEnv` — variables de entorno (también son build args automáticamente)
   - `services.app.deployService` — lanzar deploy
   - `domains.createDomain` — añadir dominio (campos: `id`, `host`, `https`, `path`, `middlewares:[]`, `certificateResolver:""`, `wildcard:false`, `destinationType:"service"`, `serviceDestination:{projectName, serviceName, port, protocol:"http"}`)
