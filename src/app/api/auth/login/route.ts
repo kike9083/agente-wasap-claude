@@ -73,7 +73,7 @@ async function createSessionProd(
 
   const data = await res.json();
   if (!res.ok) throw new Error(data.message ?? "Credenciales incorrectas");
-  return { userId: data.userId, secret: data.secret };
+  return { userId: data.userId, secret: data.$id };
 }
 
 export async function POST(request: Request) {
