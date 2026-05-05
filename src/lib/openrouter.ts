@@ -2,10 +2,16 @@ import OpenAI from "openai";
 import { getActiveSettings } from "./system-prompt";
 import { searchProducts } from "./db";
 
-const client = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+let _client: OpenAI | null = null;
+function getClient(): OpenAI {
+  if (!_client) {
+    _client = new OpenAI({
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: process.env.OPENROUTER_API_KEY,
+    });
+  }
+  return _client;
+}
 
 export interface Message {
   role: "user" | "assistant";
@@ -51,7 +57,7 @@ export async function generateReply(
     ...messages,
   ];
 
-  const response = await client.chat.completions.create({
+  const response = await getClient().chat.completions.create({
     model,
     messages: initialMessages,
     temperature: 0.7,
@@ -117,7 +123,7 @@ export async function generateReply(
     }
 
     // Call LLM again with tool results
-    const secondResponse = await client.chat.completions.create({
+    const secondResponse = await getClient().chat.completions.create({
       model,
       messages: initialMessages,
       temperature: 0.7,
