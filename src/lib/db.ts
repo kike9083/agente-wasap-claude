@@ -416,8 +416,8 @@ export async function clearRestartFlag(): Promise<void> {
   await safeUpdate(
     COLLECTIONS.restart_flag,
     SINGLETON_ID,
-    { requestedAt: null },
-    { requestedAt: null }
+    { requestedAt: 0 },
+    { requestedAt: 0 }
   );
 }
 export async function getBotSettings(): Promise<BotSettings | null> {
