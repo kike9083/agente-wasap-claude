@@ -61,9 +61,24 @@ if (!token) {
     } catch {}
   }, 2000);
 
-  bot.launch().then(() => {
-    console.log("[telegram] Bot iniciado ✅");
-  });
+  function launchWithRetry(attempt = 0) {
+    bot.launch({ dropPendingUpdates: true })
+      .then(() => console.log("[telegram] Bot iniciado ✅"))
+      .catch((err: any) => {
+        // 409 ocurre cuando el contenedor se reinicia y la sesión de polling anterior
+        // aún está activa en los servidores de Telegram (~50s de timeout)
+        if (err?.response?.error_code === 409 && attempt < 6) {
+          const delay = 15000 * (attempt + 1);
+          console.warn(`[telegram] 409 Conflict — reintentando en ${delay / 1000}s (intento ${attempt + 1})`);
+          setTimeout(() => launchWithRetry(attempt + 1), delay);
+        } else {
+          console.error("[telegram] Error fatal en bot:", err.message ?? err);
+          // No llamar process.exit — mantener el contenedor vivo para WhatsApp y Web
+        }
+      });
+  }
+
+  launchWithRetry();
 
   process.once("SIGINT", () => bot.stop("SIGINT"));
   process.once("SIGTERM", () => bot.stop("SIGTERM"));
