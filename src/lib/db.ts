@@ -100,7 +100,7 @@ export async function getOrCreateConversation(
     {
       platform,
       externalId,
-      phone: phone ?? null,
+      phone: phone ?? externalId,
       name: name ?? null,
       mode: "AI",
       createdAt: now,
