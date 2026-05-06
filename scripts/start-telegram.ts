@@ -65,10 +65,11 @@ if (!token) {
     bot.launch({ dropPendingUpdates: true })
       .then(() => console.log("[telegram] Bot iniciado ✅"))
       .catch((err: any) => {
-        // 409 ocurre cuando el contenedor se reinicia y la sesión de polling anterior
-        // aún está activa en los servidores de Telegram (~50s de timeout)
-        if (err?.response?.error_code === 409 && attempt < 6) {
-          const delay = 15000 * (attempt + 1);
+        // 409: otra instancia todavía polling. Reintentar indefinidamente con backoff fijo de 30s.
+        // zeroDowntime=false en EasyPanel garantiza que el contenedor viejo muera antes del nuevo,
+        // así el 409 se resuelve en el primer o segundo reintento.
+        if (err?.response?.error_code === 409) {
+          const delay = 30000;
           console.warn(`[telegram] 409 Conflict — reintentando en ${delay / 1000}s (intento ${attempt + 1})`);
           setTimeout(() => launchWithRetry(attempt + 1), delay);
         } else {
