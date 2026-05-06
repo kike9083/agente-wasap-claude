@@ -426,3 +426,36 @@ Cualquier ruta protegida → middleware.ts
 - **package.json:** scripts `start:telegram`, `migrate:omnichannel`, `dev:all` y `start:all` incluyen proceso TG.
 - **Fix auth (misma sesión):** `src/app/api/auth/login/route.ts` simplificado a pure Appwrite (sin `DASHBOARD_USERS`). Usa `data.$id` (no `data.secret`) para Appwrite 1.8.
 - **PRÓXIMO PASO:** Correr migración en producción (`npm run migrate:omnichannel`), luego mergear a `master` y hacer redeploy en EasyPanel. Para activar Telegram: agregar `TELEGRAM_BOT_TOKEN` en EasyPanel.
+
+### 2026-05-06 — Deploy `feature/omnichannel` en EasyPanel + Telegram funcionando ✅
+
+**Contexto:** Continuación de sesión anterior. El servicio `agente-wasap-omni` existía en EasyPanel pero el bot crasheaba en bucle.
+
+**Bugs corregidos en `scripts/start-telegram.ts`:**
+
+1. **Node.js 22 exit code 13** — `await new Promise(() => {})` a nivel de módulo top-level: Node.js 22 detecta Promises que nunca se resuelven y termina el proceso con código 13. Fix: reemplazado con `setInterval(() => {}, 2147483647)` dentro de bloque `if (!token)`. Commit `507d3e5`.
+2. **TypeScript TS2345** — después del `setInterval`, TypeScript no podía inferir que `token` es `string` (porque `setInterval` no es `never`). Fix: `new Telegraf(token!)` con non-null assertion. Commit `cac3b96`.
+3. **Telegram 409 Conflict crasheaba el contenedor** — cuando un contenedor nuevo arranca antes de que el viejo muera, Telegram rechaza el segundo polling con 409 → proceso termina con exit 1 → `concurrently --kill-others` mata TODO → EasyPanel reinicia → bucle infinito. Fixes:
+   - `launchWithRetry()` captura el 409 y reintenta indefinidamente con 30s de backoff (en vez de crashear).
+   - `zeroDowntime: false` en EasyPanel via API `updateDeploy` → el contenedor viejo muere antes de arrancar el nuevo → no hay overlap → 409 se resuelve en máximo 1-2 intentos.
+4. **Appwrite `Missing required attribute "phone"`** — `getOrCreateConversation("telegram", chatId, name)` no pasa `phone`, que en Appwrite es atributo requerido. Fix: `phone: phone ?? externalId` en `src/lib/db.ts:103`. Para Telegram, `externalId` es el chatId, que también usa el outbox poller para enviar mensajes. Commit `1eca965`.
+
+**Migración a producción (ran manually):**
+- `npx tsx scripts/migrate-omnichannel.ts` — agregó `platform` (default `whatsapp`), `externalId` a `conversations`; `platform` a `outbox`; migró 3 docs existentes; creó índice compuesto `(platform, externalId)`.
+
+**Estado final:**
+- Telegram `@shavuot_bot` ✅ — responde mensajes, crea conversaciones en Appwrite
+- WhatsApp ✅ — conectado (QR escaneado desde dashboard del navegador)
+- Dashboard ✅ — `https://varios-agente-wasap-omni.fjueze.easypanel.host/` → HTTP 200
+
+**Gotchas descubiertos:**
+- `concurrently --kill-others` + SIGTERM (de un nuevo deploy) mata todos los procesos → WhatsApp pierde sesión → hay que escanear QR de nuevo.
+- La sesión de Baileys (`/app/auth`) es efímera sin volumen. Volumen `whatsapp-auth` → `/app/auth` **ya configurado en EasyPanel** ✅ (verificado via `inspectService`).
+- `updateDeploy` en EasyPanel API acepta `mounts` en el body pero los ignora — los volúmenes SOLO se pueden configurar desde la UI del panel.
+
+**Commits de esta sesión:**
+- `507d3e5` — setInterval fix para Node.js 22
+- `cac3b96` — non-null assertion TypeScript
+- `abeecc1` → `29abfd0` — retry 409 con backoff (6 intentos → ilimitado)
+- `bc4f263` — log de arranque Telegram
+- `1eca965` — phone fallback con externalId para plataformas no-WhatsApp
