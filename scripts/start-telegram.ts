@@ -10,7 +10,7 @@ if (!token) {
   await new Promise(() => {}); // Espera indefinida — EasyPanel nunca mata el container por esto
 }
 
-const bot = new Telegraf(token);
+const bot = new Telegraf(token!);
 
 bot.on("text", async (ctx) => {
   const chatId = String(ctx.chat.id);
