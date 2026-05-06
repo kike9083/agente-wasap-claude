@@ -62,6 +62,7 @@ if (!token) {
   }, 2000);
 
   function launchWithRetry(attempt = 0) {
+    console.log(`[telegram] Conectando... (intento ${attempt + 1})`);
     bot.launch({ dropPendingUpdates: true })
       .then(() => console.log("[telegram] Bot iniciado ✅"))
       .catch((err: any) => {
