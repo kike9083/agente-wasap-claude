@@ -38,6 +38,7 @@ export function ConnectionGate() {
   const [selectedConvId, setSelectedConvId] = useState<string | undefined>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
   // En mobile: "list" muestra la lista, "panel" muestra la conversación
   const [mobileView, setMobileView] = useState<"list" | "panel">("list");
 
@@ -47,6 +48,13 @@ export function ConnectionGate() {
         const res = await fetch("/api/connection/status");
         const data = await res.json();
         setStatus(data);
+        
+        // Auto-show modal if bot is in QR or connecting state
+        if (data.status === "qr" || data.status === "connecting") {
+          setShowQRModal(true);
+        } else if (data.status === "connected") {
+          setShowQRModal(false);
+        }
       } catch (err) {
         console.error("Error polling status:", err);
       }
@@ -55,10 +63,10 @@ export function ConnectionGate() {
   }, []);
 
   useEffect(() => {
+    // Solo deseleccionar si realmente se pierde la conexión
     if (status.status !== "connected") {
-      setSelectedConvId(undefined);
-      setMessages([]);
-      setMobileView("list");
+      // Opcional: podrías mantener las conversaciones cacheadas para que el UI no se vea vacío
+      // setConversations([]); 
       return;
     }
     const pollConversations = setInterval(async () => {
@@ -93,12 +101,14 @@ export function ConnectionGate() {
   };
 
   const handleDisconnect = async () => {
+    if (!confirm("¿Estás seguro de desconectar el WhatsApp? Se cerrará la sesión actual.")) return;
     setLoading(true);
     try {
       await fetch("/api/connection/disconnect", { method: "POST" });
       setSelectedConvId(undefined);
       setMessages([]);
-      setConversations([]);
+      // Mantenemos conversaciones en el estado para que el dashboard no se vea "roto"
+      // pero el header reflejará que no está conectado.
     } catch (err) {
       console.error("Error disconnecting:", err);
     } finally {
@@ -148,25 +158,24 @@ export function ConnectionGate() {
     }
   };
 
-  if (status.status !== "connected") {
-    return <QRScreen qrPng={status.qrPng} status={status.status} />;
-  }
-
   const selectedConv = conversations.find((c) => c.id === selectedConvId);
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen bg-gray-50">
       <DashboardHeader
         phone={status.phone || null}
+        status={status.status}
         onDisconnect={handleDisconnect}
+        onConnect={() => setShowQRModal(true)}
         loading={loading}
       />
+      
       <div className="flex flex-1 overflow-hidden">
         {/* Lista — ocupa toda la pantalla en mobile cuando mobileView="list" */}
         <div
           className={`
             ${mobileView === "list" ? "flex" : "hidden"} md:flex
-            w-full md:w-80 border-r border-gray-200 bg-white flex-col shrink-0
+            w-full md:w-96 border-r border-gray-200 bg-white flex-col shrink-0 shadow-sm
           `}
         >
           <ConversationList
@@ -180,11 +189,11 @@ export function ConnectionGate() {
         <div
           className={`
             ${mobileView === "panel" ? "flex" : "hidden"} md:flex
-            flex-1 flex-col overflow-hidden
+            flex-1 flex-col overflow-hidden bg-white
           `}
         >
           {selectedConv ? (
-                      <ConversationPanel
+            <ConversationPanel
               conversation={selectedConv}
               messages={messages}
               onModeChange={handleModeChange}
@@ -199,12 +208,27 @@ export function ConnectionGate() {
               loading={loading}
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-              Selecciona una conversación
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 bg-gray-50/50">
+              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium">Selecciona una conversación para comenzar</p>
+              <p className="text-xs text-gray-400 mt-1">Puedes gestionar chats de WhatsApp y otros canales aquí</p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Modal de Conexión (QR) */}
+      {(showQRModal || status.status === "qr" || status.status === "connecting") && (
+        <QRScreen 
+          qrPng={status.qrPng} 
+          status={status.status} 
+          onClose={() => setShowQRModal(false)} 
+        />
+      )}
     </div>
   );
 }
