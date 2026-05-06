@@ -49,10 +49,8 @@ export function ConnectionGate() {
         const data = await res.json();
         setStatus(data);
         
-        // Auto-show modal if bot is in QR or connecting state
-        if (data.status === "qr" || data.status === "connecting") {
-          setShowQRModal(true);
-        } else if (data.status === "connected") {
+        // Cierra el modal automáticamente solo si se conecta exitosamente
+        if (data.status === "connected") {
           setShowQRModal(false);
         }
       } catch (err) {
@@ -222,7 +220,7 @@ export function ConnectionGate() {
       </div>
 
       {/* Modal de Conexión (QR) */}
-      {(showQRModal || status.status === "qr" || status.status === "connecting") && (
+      {showQRModal && (
         <QRScreen 
           qrPng={status.qrPng} 
           status={status.status} 
