@@ -26,7 +26,7 @@ export function QRScreen({ qrPng, status, onClose }: QRScreenProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full relative animate-in fade-in zoom-in duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full max-h-[calc(100vh-2rem)] overflow-y-auto relative animate-in fade-in zoom-in duration-300">
         {onClose && (
           <button
             onClick={onClose}
