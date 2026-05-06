@@ -5,8 +5,9 @@ import { processMessage } from "../src/lib/core/message-processor";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
-  console.error("[telegram] TELEGRAM_BOT_TOKEN no definido — proceso terminado");
-  process.exit(0); // Salida limpia para no romper start:all si no está configurado
+  console.log("[telegram] TELEGRAM_BOT_TOKEN no definido — bot desactivado (proceso en espera)");
+  // No salir: concurrently --kill-others mataría el bot y el web si este proceso termina
+  await new Promise(() => {}); // Espera indefinida — EasyPanel nunca mata el container por esto
 }
 
 const bot = new Telegraf(token);
