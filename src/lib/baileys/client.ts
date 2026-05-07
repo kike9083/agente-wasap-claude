@@ -18,6 +18,7 @@ export interface BaileysHandle {
 }
 
 let reconnectTimer: NodeJS.Timeout | null = null;
+let undefinedCodeStreak = 0;
 
 // Mapeo LID → JID real (@s.whatsapp.net) que se llena con contacts.upsert
 const lidToJid = new Map<string, string>();
@@ -87,6 +88,7 @@ async function createSocket(
 
     if (connection === "open") {
       console.log("[bot] Conectado");
+      undefinedCodeStreak = 0;
       const phone = sock.user?.id?.split(":")[0];
       setConnectionState({
         status: "connected",
@@ -96,15 +98,32 @@ async function createSocket(
     }
 
     if (connection === "close") {
-      const code = (lastDisconnect as any)?.error?.output?.statusCode;
-      console.log("[bot] Desconectado, code:", code);
+      const err = (lastDisconnect as any)?.error;
+      const code = err?.output?.statusCode ?? err?.statusCode;
+      console.log("[bot] Desconectado, code:", code, "| msg:", err?.message ?? "(sin error)");
 
       if (code === DisconnectReason.loggedOut) {
-        console.log("[bot] Sesión cerrada (401), limpiando auth y pidiendo QR nuevo...");
+        console.log("[bot] Sesión cerrada (401), limpiando auth...");
+        undefinedCodeStreak = 0;
         await setConnectionState({ status: "disconnected", qr_string: null, phone: null });
         try { fs.rmSync(authPath, { recursive: true, force: true }); } catch {}
         scheduleReconnect(2000, onReconnect);
         return;
+      }
+
+      if (code === undefined) {
+        undefinedCodeStreak++;
+        console.log(`[bot] Código desconocido (racha ${undefinedCodeStreak})`);
+        if (undefinedCodeStreak >= 3) {
+          console.log("[bot] Limpiando auth por fallos repetidos sin código...");
+          undefinedCodeStreak = 0;
+          await setConnectionState({ status: "disconnected", qr_string: null, phone: null });
+          try { fs.rmSync(authPath, { recursive: true, force: true }); } catch {}
+          scheduleReconnect(2000, onReconnect);
+          return;
+        }
+      } else {
+        undefinedCodeStreak = 0;
       }
 
       const delay = code === 440 ? 15000 : 5000;
