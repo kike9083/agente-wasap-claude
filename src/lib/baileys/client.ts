@@ -103,11 +103,11 @@ async function createSocket(
       console.log("[bot] Desconectado, code:", code, "| msg:", err?.message ?? "(sin error)");
 
       if (code === DisconnectReason.loggedOut) {
-        console.log("[bot] Sesión cerrada (401), limpiando auth...");
+        console.log("[bot] Sesión cerrada (401), limpiando auth. Esperando 5 min para reintentar...");
         undefinedCodeStreak = 0;
         await setConnectionState({ status: "disconnected", qr_string: null, phone: null });
         try { fs.rmSync(authPath, { recursive: true, force: true }); } catch {}
-        scheduleReconnect(2000, onReconnect);
+        scheduleReconnect(300000, onReconnect); // 5 minutos — evita bloqueo de IP por exceso
         return;
       }
 
