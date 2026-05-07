@@ -61,13 +61,7 @@ export function ConnectionGate() {
   }, []);
 
   useEffect(() => {
-    // Solo deseleccionar si realmente se pierde la conexión
-    if (status.status !== "connected") {
-      // Opcional: podrías mantener las conversaciones cacheadas para que el UI no se vea vacío
-      // setConversations([]); 
-      return;
-    }
-    const pollConversations = setInterval(async () => {
+    const fetchConversations = async () => {
       try {
         const res = await fetch("/api/conversations");
         const data = await res.json();
@@ -75,12 +69,14 @@ export function ConnectionGate() {
       } catch (err) {
         console.error("Error polling conversations:", err);
       }
-    }, 2000);
+    };
+    fetchConversations();
+    const pollConversations = setInterval(fetchConversations, 2000);
     return () => clearInterval(pollConversations);
-  }, [status.status]);
+  }, []);
 
   useEffect(() => {
-    if (!selectedConvId || status.status !== "connected") return;
+    if (!selectedConvId) return;
     const pollMessages = setInterval(async () => {
       try {
         const res = await fetch(`/api/messages/${selectedConvId}`);
@@ -91,7 +87,7 @@ export function ConnectionGate() {
       }
     }, 2000);
     return () => clearInterval(pollMessages);
-  }, [selectedConvId, status.status]);
+  }, [selectedConvId]);
 
   const handleSelectConversation = (id: string) => {
     setSelectedConvId(id);
