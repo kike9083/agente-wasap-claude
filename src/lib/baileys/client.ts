@@ -8,6 +8,7 @@ import {
 import { setConnectionState, getConnectionState } from "../db";
 import handleMessage from "./handler";
 import pino from "pino";
+import fs from "node:fs";
 
 const logger = pino({ level: "silent" });
 
@@ -68,7 +69,7 @@ async function createSocket(
   sock.ev.on("contacts.update", (contacts: any[]) => contacts.forEach(mapContact));
 
   sock.ev.on("connection.update", async (update: any) => {
-    const { connection, lastDisconnectReason, qr } = update;
+    const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
       console.log("[bot] QR Generado");
@@ -95,16 +96,14 @@ async function createSocket(
     }
 
     if (connection === "close") {
-      const code = (lastDisconnectReason as any)?.error?.statusCode;
+      const code = (lastDisconnect as any)?.error?.output?.statusCode;
       console.log("[bot] Desconectado, code:", code);
 
       if (code === DisconnectReason.loggedOut) {
-        console.log("[bot] Sesión cerrada (401), limpiando...");
-        setConnectionState({
-          status: "disconnected",
-          qr_string: null,
-          phone: null,
-        });
+        console.log("[bot] Sesión cerrada (401), limpiando auth y pidiendo QR nuevo...");
+        await setConnectionState({ status: "disconnected", qr_string: null, phone: null });
+        try { fs.rmSync(authPath, { recursive: true, force: true }); } catch {}
+        scheduleReconnect(2000, onReconnect);
         return;
       }
 

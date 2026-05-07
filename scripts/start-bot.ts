@@ -116,7 +116,6 @@ function startTimeoutPoller() {
           await handle.sock.sendMessage(jid, { text: returnMsg });
         }
         await insertMessage(convo.id, "assistant", returnMsg);
-        await insertMessage(convo.id, "assistant", returnMsg);
       }
     } catch (err) {
       console.error("[bot] Error en timeout poller:", err);
