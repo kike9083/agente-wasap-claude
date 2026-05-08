@@ -1,7 +1,7 @@
 import "./env-loader";
 import path from "node:path";
 import fs from "node:fs";
-import { startBot, clearReconnectTimer, resolveJid } from "../src/lib/baileys/client";
+import { startBot, clearReconnectTimer, clearPendingAuth, resolveJid } from "../src/lib/baileys/client";
 import {
   getPendingOutbox,
   markOutboxSent,
@@ -43,6 +43,8 @@ async function handleReconnect(_delay: number) {
     try { handle.sock.end(undefined); } catch {}
     handle = null;
   }
+  // Borrar auth DESPUÉS de sock.end() para evitar que Windows bloquee los archivos
+  clearPendingAuth(authDir);
   await start();
 }
 
@@ -137,5 +139,11 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+process.on("unhandledRejection", (reason) => {
+  console.error("[bot] unhandledRejection (ignorado):", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[bot] uncaughtException (ignorado):", err);
+});
 
 start();

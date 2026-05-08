@@ -19,6 +19,7 @@ export interface BaileysHandle {
 
 let reconnectTimer: NodeJS.Timeout | null = null;
 let undefinedCodeStreak = 0;
+let pendingAuthClear = false; // auth a borrar DESPUÉS de cerrar el socket
 
 // Mapeo LID → JID real (@s.whatsapp.net) que se llena con contacts.upsert
 const lidToJid = new Map<string, string>();
@@ -74,16 +75,18 @@ async function createSocket(
 
     if (qr) {
       console.log("[bot] QR Generado");
-      setConnectionState({ status: "qr", qr_string: qr, phone: null });
+      setConnectionState({ status: "qr", qr_string: qr, phone: null }).catch(() => {});
     }
 
     if (connection === "connecting") {
-      getConnectionState().then((current) => {
-        if (current.status === "disconnected") {
-          console.log("[bot] Conectando...");
-          setConnectionState({ status: "connecting" });
-        }
-      });
+      getConnectionState()
+        .then((current) => {
+          if (current.status === "disconnected") {
+            console.log("[bot] Conectando...");
+            return setConnectionState({ status: "connecting" });
+          }
+        })
+        .catch(() => {});
     }
 
     if (connection === "open") {
@@ -94,7 +97,7 @@ async function createSocket(
         status: "connected",
         qr_string: null,
         phone: phone || null,
-      });
+      }).catch(() => {});
     }
 
     if (connection === "close") {
@@ -103,10 +106,10 @@ async function createSocket(
       console.log("[bot] Desconectado, code:", code, "| msg:", err?.message ?? "(sin error)");
 
       if (code === DisconnectReason.loggedOut) {
-        console.log("[bot] Sesión cerrada (401), limpiando auth. Esperando 5 min para reintentar...");
+        console.log("[bot] Sesión cerrada (401), marcando auth para limpiar. Esperando 5 min para reintentar...");
         undefinedCodeStreak = 0;
+        pendingAuthClear = true; // se borrará en handleReconnect tras cerrar el socket
         await setConnectionState({ status: "disconnected", qr_string: null, phone: null });
-        try { fs.rmSync(authPath, { recursive: true, force: true }); } catch {}
         scheduleReconnect(300000, onReconnect); // 5 minutos — evita bloqueo de IP por exceso
         return;
       }
@@ -115,10 +118,10 @@ async function createSocket(
         undefinedCodeStreak++;
         console.log(`[bot] Código desconocido (racha ${undefinedCodeStreak})`);
         if (undefinedCodeStreak >= 3) {
-          console.log("[bot] Limpiando auth por fallos repetidos sin código...");
+          console.log("[bot] Marcando auth para limpiar por fallos repetidos sin código...");
           undefinedCodeStreak = 0;
+          pendingAuthClear = true;
           await setConnectionState({ status: "disconnected", qr_string: null, phone: null });
-          try { fs.rmSync(authPath, { recursive: true, force: true }); } catch {}
           scheduleReconnect(2000, onReconnect);
           return;
         }
@@ -163,5 +166,17 @@ export function clearReconnectTimer() {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
+  }
+}
+
+/** Borra la carpeta de auth si está pendiente (debe llamarse DESPUÉS de sock.end()) */
+export function clearPendingAuth(authPath: string) {
+  if (!pendingAuthClear) return;
+  pendingAuthClear = false;
+  try {
+    fs.rmSync(authPath, { recursive: true, force: true });
+    console.log("[bot] Auth limpiado correctamente.");
+  } catch (err) {
+    console.warn("[bot] No se pudo limpiar auth:", err);
   }
 }
