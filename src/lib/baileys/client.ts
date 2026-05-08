@@ -20,6 +20,7 @@ export interface BaileysHandle {
 let reconnectTimer: NodeJS.Timeout | null = null;
 let undefinedCodeStreak = 0;
 let pendingAuthClear = false; // auth a borrar DESPUÉS de cerrar el socket
+let hasEverConnected = false; // true si este socket llegó a estado "open"
 
 // Mapeo LID → JID real (@s.whatsapp.net) que se llena con contacts.upsert
 const lidToJid = new Map<string, string>();
@@ -36,6 +37,7 @@ async function createSocket(
   authPath: string,
   onReconnect: (delay: number) => void
 ): Promise<BaileysHandle> {
+  hasEverConnected = false;
   let version: [number, number, number] | undefined;
   try {
     const fetched = await fetchLatestBaileysVersion();
@@ -92,6 +94,7 @@ async function createSocket(
     if (connection === "open") {
       console.log("[bot] Conectado");
       undefinedCodeStreak = 0;
+      hasEverConnected = true;
       const phone = sock.user?.id?.split(":")[0];
       setConnectionState({
         status: "connected",
@@ -106,9 +109,16 @@ async function createSocket(
       console.log("[bot] Desconectado, code:", code, "| msg:", err?.message ?? "(sin error)");
 
       if (code === DisconnectReason.loggedOut) {
-        console.log("[bot] Sesión cerrada (401), marcando auth para limpiar. Esperando 5 min para reintentar...");
+        if (hasEverConnected) {
+          // La sesión fue revocada realmente → limpiar auth
+          console.log("[bot] Sesión revocada (401 tras conexión activa), marcando auth para limpiar. Esperando 5 min...");
+          pendingAuthClear = true;
+        } else {
+          // Nunca conectó → probablemente bloqueo de IP, conservar auth
+          console.log("[bot] 401 sin conexión previa — posible bloqueo de IP, conservando auth. Esperando 5 min...");
+        }
+        hasEverConnected = false;
         undefinedCodeStreak = 0;
-        pendingAuthClear = true; // se borrará en handleReconnect tras cerrar el socket
         await setConnectionState({ status: "disconnected", qr_string: null, phone: null });
         scheduleReconnect(300000, onReconnect); // 5 minutos — evita bloqueo de IP por exceso
         return;
