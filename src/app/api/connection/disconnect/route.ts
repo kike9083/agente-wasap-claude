@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { setConnectionState, requestRestart } from "@/lib/db";
-import fs from "node:fs";
+import { clearAuthContents } from "@/lib/baileys/client";
 import path from "node:path";
 
 export async function POST(_req: NextRequest) {
   await setConnectionState({ status: "disconnected", qr_string: null, phone: null });
 
+  // Borra solo el contenido de auth, no el directorio (es mount point en Docker)
   const authDir = path.resolve(process.cwd(), "auth");
-  try { fs.rmSync(authDir, { recursive: true, force: true }); } catch {}
+  clearAuthContents(authDir);
 
   await requestRestart();
 

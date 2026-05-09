@@ -9,6 +9,7 @@ import { setConnectionState, getConnectionState } from "../db";
 import handleMessage from "./handler";
 import pino from "pino";
 import fs from "node:fs";
+import path from "node:path";
 
 const logger = pino({ level: "silent" });
 
@@ -179,14 +180,20 @@ export function clearReconnectTimer() {
   }
 }
 
-/** Borra la carpeta de auth si está pendiente (debe llamarse DESPUÉS de sock.end()) */
+/** Borra el contenido del directorio auth (no el directorio en sí — es mount point en Docker) */
+export function clearAuthContents(authPath: string): void {
+  try {
+    const files = fs.readdirSync(authPath);
+    for (const f of files) {
+      try { fs.unlinkSync(path.join(authPath, f)); } catch {}
+    }
+  } catch {}
+}
+
+/** Borra el auth si está pendiente (debe llamarse DESPUÉS de sock.end()) */
 export function clearPendingAuth(authPath: string) {
   if (!pendingAuthClear) return;
   pendingAuthClear = false;
-  try {
-    fs.rmSync(authPath, { recursive: true, force: true });
-    console.log("[bot] Auth limpiado correctamente.");
-  } catch (err) {
-    console.warn("[bot] No se pudo limpiar auth:", err);
-  }
+  clearAuthContents(authPath);
+  console.log("[bot] Auth limpiado correctamente.");
 }

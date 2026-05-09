@@ -1,7 +1,7 @@
 import "./env-loader";
 import path from "node:path";
 import fs from "node:fs";
-import { startBot, clearReconnectTimer, clearPendingAuth, resolveJid } from "../src/lib/baileys/client";
+import { startBot, clearReconnectTimer, clearPendingAuth, clearAuthContents, resolveJid } from "../src/lib/baileys/client";
 import {
   getPendingOutbox,
   markOutboxSent,
@@ -87,7 +87,7 @@ function startRestartChecker() {
         handle = null;
       }
 
-      try { fs.rmSync(authDir, { recursive: true, force: true }); } catch {}
+      clearAuthContents(authDir); // borra archivos, no el directorio (es mount point en Docker)
 
       await setConnectionState({ status: "disconnected", qr_string: null, phone: null });
       await start();
