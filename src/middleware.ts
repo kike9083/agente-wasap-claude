@@ -5,6 +5,8 @@ const PUBLIC_PATHS = [
   "/login",
   "/api/auth/login",
   "/api/connection",
+  "/api/chat",
+  "/jaiger-house.html",
 ];
 
 export function middleware(request: NextRequest) {
