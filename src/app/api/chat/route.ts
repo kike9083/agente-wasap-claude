@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { getOrCreateConversation } from "@/lib/db";
 import { processMessage } from "@/lib/core/message-processor";
+import { isChannelEnabled } from "@/lib/channels";
 
 export async function POST(request: Request) {
+  if (!isChannelEnabled("webchat")) {
+    return NextResponse.json({ error: "Canal WebChat no disponible en este plan" }, { status: 403 });
+  }
   try {
     const { sessionId, name, message } = await request.json();
 

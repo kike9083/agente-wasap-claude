@@ -64,6 +64,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [enabledChannels, setEnabledChannels] = useState<string[]>(["whatsapp", "telegram", "webchat"]);
 
   // Global settings
   const [prompt, setPrompt] = useState("");
@@ -93,6 +94,11 @@ export default function SettingsPage() {
         if (data.user?.labels?.includes("admin")) setIsAdmin(true);
       })
       .catch(console.error);
+
+    fetch("/api/channels")
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d.channels)) setEnabledChannels(d.channels); })
+      .catch(() => {});
 
     fetch("/api/settings")
       .then((res) => res.json())
@@ -260,6 +266,7 @@ export default function SettingsPage() {
 
   const currentChannelForm = channelForms[activeTab] ?? EMPTY_CHANNEL;
   const channelTabLoading = activeTab !== "global" && !channelLoaded[activeTab];
+  const visibleTabs = TABS.filter((t) => t.id === "global" || enabledChannels.includes(t.id));
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -282,7 +289,7 @@ export default function SettingsPage() {
         {/* Tabs */}
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex gap-1">
-            {TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"

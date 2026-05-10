@@ -1,6 +1,7 @@
 import "./env-loader";
 import path from "node:path";
 import fs from "node:fs";
+import { isChannelEnabled } from "../src/lib/channels";
 import { startBot, clearReconnectTimer, clearPendingAuth, clearAuthContents, resolveJid } from "../src/lib/baileys/client";
 import {
   getPendingOutbox,
@@ -147,4 +148,8 @@ process.on("uncaughtException", (err) => {
   console.error("[bot] uncaughtException (ignorado):", err);
 });
 
-start();
+if (isChannelEnabled("whatsapp")) {
+  start();
+} else {
+  console.log("[bot] WhatsApp no incluido en ENABLED_CHANNELS — bot desactivado");
+}

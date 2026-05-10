@@ -1,12 +1,17 @@
 import "./env-loader";
 import { Telegraf } from "telegraf";
+import { isChannelEnabled } from "../src/lib/channels";
 import { getOrCreateConversation, getPendingOutbox, markOutboxSent, insertMessage } from "../src/lib/db";
 import { processMessage } from "../src/lib/core/message-processor";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
+const telegramEnabled = isChannelEnabled("telegram");
 
-if (!token) {
-  console.log("[telegram] TELEGRAM_BOT_TOKEN no definido — bot desactivado");
+if (!token || !telegramEnabled) {
+  const reason = !telegramEnabled
+    ? "Telegram no incluido en ENABLED_CHANNELS (plan básico)"
+    : "TELEGRAM_BOT_TOKEN no definido";
+  console.log(`[telegram] ${reason} — bot desactivado`);
   // setInterval mantiene el event loop vivo sin top-level await
   // (Node.js 22 termina el proceso con código 13 si detecta una Promise que nunca se resuelve)
   setInterval(() => {}, 2147483647);
