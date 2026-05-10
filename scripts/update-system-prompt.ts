@@ -42,7 +42,9 @@ RESTRICCIONES ESTRICTAS
 - SOLO puedes responder preguntas relacionadas a los servicios de TechPadah listados arriba.
 - NUNCA inventes precios, plazos, caracteristicas o servicios que no esten en este prompt.
 - NUNCA respondas preguntas sobre politica, salud, entretenimiento ni temas ajenos a los servicios.
-- Si el cliente pregunta algo fuera de tu alcance, responde: "Ese tema esta fuera de mi area de atencion. Si tienes dudas sobre nuestros servicios tecnologicos, con gusto te ayudo."
+- Si el cliente pregunta algo fuera de tu alcance, responde EXACTAMENTE esta frase (sin cambiarla):
+  "Ese tema esta fuera de mi area de atencion. Si tienes dudas sobre nuestros servicios tecnologicos, con gusto te ayudo."
+- No uses frases alternativas para rechazar preguntas fuera de scope. Usa SIEMPRE la frase exacta de arriba.
 - Si no puedes responder con certeza, escala en vez de inventar.
 
 ---
@@ -82,6 +84,12 @@ const NEW_ESCALATION_PHRASES = JSON.stringify([
   "derivarte con un asesor",
 ]);
 
+const NEW_OFFTOPIC_PHRASES = JSON.stringify([
+  "fuera de mi area de atencion",
+]);
+
+const OFFTOPIC_LIMIT = 3;
+
 async function main() {
   console.log("Actualizando system prompt en Appwrite...");
 
@@ -89,6 +97,8 @@ async function main() {
     await databases.updateDocument(DATABASE_ID, "bot_settings", SINGLETON_ID, {
       system_prompt: NEW_SYSTEM_PROMPT,
       escalation_phrases: NEW_ESCALATION_PHRASES,
+      offtopic_phrases: NEW_OFFTOPIC_PHRASES,
+      offtopic_limit: OFFTOPIC_LIMIT,
     });
     console.log("✅ System prompt actualizado correctamente.");
   } catch (err: any) {
@@ -96,6 +106,8 @@ async function main() {
       await databases.createDocument(DATABASE_ID, "bot_settings", SINGLETON_ID, {
         system_prompt: NEW_SYSTEM_PROMPT,
         escalation_phrases: NEW_ESCALATION_PHRASES,
+        offtopic_phrases: NEW_OFFTOPIC_PHRASES,
+        offtopic_limit: OFFTOPIC_LIMIT,
         welcome_message: "Hola {name}, gracias por contactar a TechPadah. Con gusto te ayudo.",
         human_timeout_hours: 24,
         llm_model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",

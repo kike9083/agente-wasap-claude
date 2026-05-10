@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const body = await req.json();
   const { mode } = body;
 
-  if (!mode || (mode !== "AI" && mode !== "HUMAN")) {
+  if (!mode || (mode !== "AI" && mode !== "HUMAN" && mode !== "BANNED")) {
     return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
   }
 

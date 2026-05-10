@@ -17,7 +17,7 @@ interface Conversation {
   externalId: string;
   phone: string | null;
   name: string | null;
-  mode: "AI" | "HUMAN";
+  mode: "AI" | "HUMAN" | "BANNED";
   tags: string[];
 }
 
@@ -48,7 +48,7 @@ function formatPhone(phone: string): string {
 interface ConversationPanelProps {
   conversation: Conversation;
   messages: Message[];
-  onModeChange: (mode: "AI" | "HUMAN") => Promise<void>;
+  onModeChange: (mode: "AI" | "HUMAN" | "BANNED") => Promise<void>;
   onSendMessage: (content: string) => Promise<void>;
   onDelete: () => Promise<void>;
   onTagsChange?: (tags: string[]) => void;
@@ -115,7 +115,7 @@ export function ConversationPanel({
     await saveTags(tags.filter((t) => t !== tag));
   };
 
-  const handleModeChange = async (mode: "AI" | "HUMAN") => {
+  const handleModeChange = async (mode: "AI" | "HUMAN" | "BANNED") => {
     setModeLoading(true);
     try { await onModeChange(mode); } finally { setModeLoading(false); }
   };
@@ -261,7 +261,12 @@ export function ConversationPanel({
 
       {/* Input */}
       <div className="border-t border-gray-200 p-3 md:p-4">
-        {conversation.mode === "AI" ? (
+        {conversation.mode === "BANNED" ? (
+          <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <span>🚫</span>
+            <span>Contacto bloqueado — el bot ignora todos sus mensajes. Cambia a IA o Humano para desbloquear.</span>
+          </div>
+        ) : conversation.mode === "AI" ? (
           <p className="text-sm text-gray-500 italic">El bot responde automáticamente</p>
         ) : (
           <div className="relative">

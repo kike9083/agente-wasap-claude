@@ -9,7 +9,7 @@ interface Conversation {
   externalId: string;
   phone: string | null;
   name: string | null;
-  mode: "AI" | "HUMAN";
+  mode: "AI" | "HUMAN" | "BANNED";
   last_message_at: number | null;
   last_message_preview?: string | null;
 }

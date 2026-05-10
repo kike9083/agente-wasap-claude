@@ -9,11 +9,12 @@ export interface Conversation {
   externalId: string;
   phone: string | null;
   name: string | null;
-  mode: "AI" | "HUMAN";
+  mode: "AI" | "HUMAN" | "BANNED";
   last_message_at: number | null;
   last_message_preview: string | null;
   created_at: number;
   tags: string[];
+  offtopic_count: number;
 }
 
 export interface Message {
@@ -38,6 +39,8 @@ export interface BotSettings {
   llm_model?: string;
   host_phone?: string;
   escalation_phrases?: string;
+  offtopic_phrases?: string;
+  offtopic_limit?: number;
 }
 
 function docToConversation(doc: any): Conversation {
@@ -49,11 +52,12 @@ function docToConversation(doc: any): Conversation {
     externalId: doc.externalId ?? doc.phone ?? "",
     phone: doc.phone ?? null,
     name: doc.name ?? null,
-    mode: (doc.mode ?? "AI") as "AI" | "HUMAN",
+    mode: (doc.mode ?? "AI") as "AI" | "HUMAN" | "BANNED",
     last_message_at: doc.lastMessageAt ?? null,
     last_message_preview: doc.lastMessagePreview ?? null,
     created_at: doc.createdAt,
     tags,
+    offtopic_count: doc.offtopicCount ?? 0,
   };
 }
 
@@ -228,7 +232,7 @@ export async function getRecentHistory(
 
 export async function setMode(
   conversationId: string,
-  mode: "AI" | "HUMAN"
+  mode: "AI" | "HUMAN" | "BANNED"
 ): Promise<void> {
   await databases.updateDocument(
     DATABASE_ID,
@@ -447,6 +451,8 @@ export async function getBotSettings(): Promise<BotSettings | null> {
       llm_model: doc.llm_model || "",
       host_phone: doc.host_phone || "",
       escalation_phrases: doc.escalation_phrases || "[]",
+      offtopic_phrases: doc.offtopic_phrases || "[]",
+      offtopic_limit: doc.offtopic_limit ?? 3,
     };
   } catch {
     return null;
@@ -461,8 +467,25 @@ export async function updateBotSettings(settings: Partial<BotSettings>): Promise
   if (settings.llm_model !== undefined) data.llm_model = settings.llm_model;
   if (settings.host_phone !== undefined) data.host_phone = settings.host_phone;
   if (settings.escalation_phrases !== undefined) data.escalation_phrases = settings.escalation_phrases;
-  
+  if (settings.offtopic_phrases !== undefined) data.offtopic_phrases = settings.offtopic_phrases;
+  if (settings.offtopic_limit !== undefined) data.offtopic_limit = settings.offtopic_limit;
+
   await databases.updateDocument(DATABASE_ID, "bot_settings", SINGLETON_ID, data);
+}
+
+export async function incrementOfftopicCount(conversationId: string): Promise<number> {
+  const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.conversations, conversationId);
+  const newCount = (doc.offtopicCount ?? 0) + 1;
+  await databases.updateDocument(DATABASE_ID, COLLECTIONS.conversations, conversationId, {
+    offtopicCount: newCount,
+  });
+  return newCount;
+}
+
+export async function resetOfftopicCount(conversationId: string): Promise<void> {
+  await databases.updateDocument(DATABASE_ID, COLLECTIONS.conversations, conversationId, {
+    offtopicCount: 0,
+  });
 }
 
 export async function searchProducts(query: string): Promise<any[]> {

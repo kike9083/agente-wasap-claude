@@ -4,6 +4,8 @@ import {
   getRecentHistory,
   setMode,
   notifyHostViaOutbox,
+  incrementOfftopicCount,
+  resetOfftopicCount,
   type Platform,
 } from "../db";
 import { generateReply } from "../openrouter";
@@ -55,21 +57,41 @@ export async function processMessage(
 
   // ── Llamar al LLM ────────────────────────────────────────────────────────
   const history = await getRecentHistory(conversationId, 20);
-  const reply = await generateReply(history, text);
-
-  await insertMessage(conversationId, "assistant", reply);
-  await sendReply(reply);
+  let reply = await generateReply(history, text);
 
   // ── Detección de escalación ──────────────────────────────────────────────
   let phrases: string[] = [];
   try { phrases = JSON.parse(settings.escalation_phrases || "[]"); } catch {}
-
   const wasEscalation = phrases.some((p) => reply.toLowerCase().includes(p.toLowerCase()));
 
-  if (wasEscalation) {
+  // ── Detección de off-topic y límite de intentos ──────────────────────────
+  let forceEscalation = false;
+  if (!wasEscalation) {
+    let offtopicPhrases: string[] = [];
+    try { offtopicPhrases = JSON.parse(settings.offtopic_phrases || "[]"); } catch {}
+    const limit = settings.offtopic_limit ?? 3;
+
+    const wasOfftopic = offtopicPhrases.length > 0 &&
+      offtopicPhrases.some((p) => reply.toLowerCase().includes(p.toLowerCase()));
+
+    if (wasOfftopic) {
+      const newCount = await incrementOfftopicCount(conversationId);
+      if (newCount >= limit) {
+        forceEscalation = true;
+        reply = "Has enviado varias consultas fuera de nuestros servicios. Dejame conectarte con un asesor de TechPadah para atenderte mejor.";
+      }
+    }
+  }
+
+  await insertMessage(conversationId, "assistant", reply);
+  await sendReply(reply);
+
+  const didEscalate = wasEscalation || forceEscalation;
+
+  if (didEscalate) {
     await setMode(conversationId, "HUMAN");
+    await resetOfftopicCount(conversationId);
     await onEscalation?.(name, text);
-    // Para canales no-WhatsApp, notificar al host via outbox (el bot WA lo envía)
     if (platform !== "whatsapp") {
       await notifyHostViaOutbox(platform, name, text).catch(() => {});
     }
@@ -80,5 +102,5 @@ export async function processMessage(
     }).catch(() => {});
   }
 
-  return { replied: true, wasEscalation, wasWelcome: false };
+  return { replied: true, wasEscalation: didEscalate, wasWelcome: false };
 }

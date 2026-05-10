@@ -1,8 +1,8 @@
 "use client";
 
 interface ModeToggleProps {
-  mode: "AI" | "HUMAN";
-  onChange: (mode: "AI" | "HUMAN") => void;
+  mode: "AI" | "HUMAN" | "BANNED";
+  onChange: (mode: "AI" | "HUMAN" | "BANNED") => void;
   loading?: boolean;
 }
 
@@ -30,6 +30,18 @@ export function ModeToggle({ mode, onChange, loading = false }: ModeToggleProps)
         } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
       >
         Humano
+      </button>
+      <button
+        onClick={() => onChange("BANNED")}
+        disabled={loading}
+        title="Bloquear: el bot ignorará todos los mensajes de este contacto"
+        className={`px-3 py-1 rounded-md font-medium text-sm transition ${
+          mode === "BANNED"
+            ? "bg-red-100 text-red-800"
+            : "text-gray-600 hover:bg-red-50 hover:text-red-600"
+        } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
+      >
+        {mode === "BANNED" ? "Bloqueado" : "Bloquear"}
       </button>
     </div>
   );
