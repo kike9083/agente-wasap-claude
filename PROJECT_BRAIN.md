@@ -200,6 +200,7 @@ rm -rf auth/
 - ✅ Off-topic limit: 3 mensajes fuera de scope → escalación forzada (conteo en Appwrite, determinístico)
 - ✅ BANNED mode: bot ignora silenciosamente contactos bloqueados. Botón "Bloquear" en dashboard.
 - ✅ Notificación WhatsApp al host desde Telegram/WebChat via outbox (outbox JID fix aplicado)
+- ✅ `ENABLED_CHANNELS` — control de plan de pago por instalación (token presente ≠ canal activo)
 - ✅ Push notifications para escalaciones
 - ✅ TypeScript sin errores de compilación
 - ✅ Bot robusto: no crashea en timeouts de red, no borra auth en bloqueos de IP
@@ -535,6 +536,36 @@ EasyPanel nombra los volúmenes con un prefijo. NO es `/var/lib/docker/volumes/w
 **Commits:**
 - `d8699c0` — crash fix: `.catch()` en setConnectionState + handlers globales + clearPendingAuth post sock.end()
 - `ef99771` — preservar auth en 401 sin conexión previa (bloqueo de IP vs sesión revocada)
+
+### 2026-05-10 — ENABLED_CHANNELS: control de canales por plan de pago
+
+**Feature:** Variable de entorno `ENABLED_CHANNELS` que limita qué canales están activos por instalación.
+Permite vender el mismo codebase a múltiples clientes con diferentes precios según los canales contratados.
+
+**Archivos nuevos:**
+- `src/lib/channels.ts` — `getEnabledChannels()`, `isChannelEnabled(channel)`. Default: todos activos.
+- `src/app/api/channels/route.ts` — GET que expone la lista de canales activos al cliente (para la UI).
+
+**Archivos modificados:**
+- `scripts/start-bot.ts` — Baileys no arranca si `"whatsapp"` no está en `ENABLED_CHANNELS`
+- `scripts/start-telegram.ts` — Telegraf no arranca si `"telegram"` no está en `ENABLED_CHANNELS`, aunque `TELEGRAM_BOT_TOKEN` esté definido
+- `src/app/api/chat/route.ts` — devuelve HTTP 403 si `"webchat"` no está habilitado
+- `src/app/settings/page.tsx` — fetcha `/api/channels` al cargar, filtra `visibleTabs` para ocultar canales no contratados
+
+**Tabla de planes:**
+```
+ENABLED_CHANNELS=whatsapp                   → Plan básico
+ENABLED_CHANNELS=whatsapp,telegram          → +Telegram ($100)
+ENABLED_CHANNELS=whatsapp,webchat           → +WebChat ($100)
+ENABLED_CHANNELS=whatsapp,telegram,webchat  → Plan completo
+```
+
+**Principio crítico:** `TELEGRAM_BOT_TOKEN` presente en env vars ≠ canal activo.
+El enforcement es por código (`isChannelEnabled()`), no por presencia del token.
+
+**En producción (prueba activa):** `ENABLED_CHANNELS=whatsapp,webchat` — Telegram desactivado.
+
+**Commit:** `704106e`
 
 ### 2026-05-09 — Channel-specific settings (Option C)
 
