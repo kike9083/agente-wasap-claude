@@ -30,6 +30,10 @@ export interface ProcessMessageOutput {
   wasWelcome: boolean;
 }
 
+function normalize(str: string): string {
+  return str.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
 export async function processMessage(
   input: ProcessMessageInput
 ): Promise<ProcessMessageOutput> {
@@ -62,7 +66,7 @@ export async function processMessage(
   // ── Detección de escalación ──────────────────────────────────────────────
   let phrases: string[] = [];
   try { phrases = JSON.parse(settings.escalation_phrases || "[]"); } catch {}
-  const wasEscalation = phrases.some((p) => reply.toLowerCase().includes(p.toLowerCase()));
+  const wasEscalation = phrases.some((p) => normalize(reply).includes(normalize(p)));
 
   // ── Detección de off-topic y límite de intentos ──────────────────────────
   let forceEscalation = false;
@@ -72,7 +76,7 @@ export async function processMessage(
     const limit = settings.offtopic_limit ?? 3;
 
     const wasOfftopic = offtopicPhrases.length > 0 &&
-      offtopicPhrases.some((p) => reply.toLowerCase().includes(p.toLowerCase()));
+      offtopicPhrases.some((p) => normalize(reply).includes(normalize(p)));
 
     if (wasOfftopic) {
       const newCount = await incrementOfftopicCount(conversationId);
