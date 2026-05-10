@@ -389,6 +389,23 @@ export async function markOutboxSent(id: string): Promise<void> {
   });
 }
 
+export async function notifyHostViaOutbox(
+  platform: string,
+  clientName: string,
+  lastMsg: string
+): Promise<void> {
+  const hostPhone = process.env.HOST_PHONE;
+  if (!hostPhone) return;
+  const labels: Record<string, string> = { telegram: "Telegram", webchat: "WebChat", instagram: "Instagram", facebook: "Facebook" };
+  const label = labels[platform] ?? platform;
+  const { conversation } = await getOrCreateConversation("whatsapp", hostPhone, "Sistema", hostPhone);
+  await enqueueOutbox(
+    conversation.id,
+    hostPhone,
+    `[TechPadah] Atencion requerida\n\nCanal: ${label}\nCliente: ${clientName}\nUltimo mensaje: "${lastMsg.slice(0, 200)}"\n\nRevisa el dashboard para responder.`
+  );
+}
+
 export async function requestRestart(): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
   await safeUpdate(

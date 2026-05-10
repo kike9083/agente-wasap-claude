@@ -3,6 +3,7 @@ import {
   getConversationById,
   getRecentHistory,
   setMode,
+  notifyHostViaOutbox,
   type Platform,
 } from "../db";
 import { generateReply } from "../openrouter";
@@ -68,9 +69,13 @@ export async function processMessage(
   if (wasEscalation) {
     await setMode(conversationId, "HUMAN");
     await onEscalation?.(name, text);
+    // Para canales no-WhatsApp, notificar al host via outbox (el bot WA lo envía)
+    if (platform !== "whatsapp") {
+      await notifyHostViaOutbox(platform, name, text).catch(() => {});
+    }
     await sendPushToAll({
-      title: "⚠️ Atención requerida",
-      body: `${name}: "${text.slice(0, 100)}"`,
+      title: "Atencion requerida",
+      body: `${name} (${platform}): "${text.slice(0, 100)}"`,
       url: "/",
     }).catch(() => {});
   }

@@ -50,7 +50,7 @@ export async function generateReply(
 
   const activeSettings = await getActiveSettings();
   const model = activeSettings.llm_model || process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
-  const systemPrompt = activeSettings.system_prompt + "\n\nINSTRUCCIÓN CRÍTICA: Tienes acceso a una herramienta para buscar productos. SI EL CLIENTE PREGUNTA POR UN PRODUCTO ESPECÍFICO (ej. aire acondicionado, cama, comedor, estufa, lavadora, colchón, etc.), DEBES usar OBLIGATORIAMENTE la herramienta 'searchAppwriteCatalog' para consultar el precio exacto y URL en tiempo real antes de responder. Nunca adivines precios ni asumas que no hay.";
+  const systemPrompt = activeSettings.system_prompt;
 
   const initialMessages = [
     { role: "system", content: systemPrompt },

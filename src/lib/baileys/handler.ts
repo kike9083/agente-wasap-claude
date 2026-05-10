@@ -41,7 +41,7 @@ async function notifyHost(
     : `+${displayNumber}`;
 
   const text =
-    `[Jaiger House] Atencion requerida\n\n` +
+    `[TechPadah] Atencion requerida\n\n` +
     `Cliente: ${clientName}\n` +
     `Numero: ${phoneLabel}\n` +
     `Ultimo mensaje: "${lastMessage}"\n\n` +
@@ -118,7 +118,7 @@ export default async function handleMessage(
               ? `${displayNumber} (abre el dashboard)`
               : `+${displayNumber}`;
             await sock.sendMessage(`${hostPhone}@s.whatsapp.net`, {
-              text: `[Jaiger House] Imagen recibida 📷\n\nCliente: ${pushName} (${phoneLabel})\nRevisa el dashboard.`,
+              text: `[TechPadah] Imagen recibida\n\nCliente: ${pushName} (${phoneLabel})\nRevisa el dashboard.`,
             });
           }
           await setMode(convo.id, "HUMAN");
