@@ -61,11 +61,13 @@ Agente conversacional de WhatsApp que conecta un número real con un LLM vía Op
 
 | Colección | Propósito | ID fijo |
 |---|---|---|
-| `conversations` | Un doc por contacto. phone (unique), name, mode, lastMessageAt, lastMessagePreview | — |
+| `conversations` | Un doc por contacto. platform+externalId, name, mode (AI/HUMAN/BANNED), lastMessageAt, lastMessagePreview, offtopicCount | — |
 | `messages` | Historial. conversationId, role, content, createdAt | — |
 | `connection_state` | Singleton: estado del socket Baileys | `singleton` |
 | `outbox` | Cola FIFO: dashboard encola → bot envía cada 2s | — |
 | `restart_flag` | IPC: dashboard escribe timestamp → bot reinicia | `singleton` |
+| `bot_settings` | Singleton: system_prompt, escalation_phrases, offtopic_phrases, offtopic_limit, welcome_message, host_phone, llm_model, human_timeout_hours | `singleton` |
+| `channel_settings` | Config por canal: mismo schema que bot_settings menos human_timeout_hours. Doc ID = nombre de plataforma ("whatsapp", "telegram", "webchat"). Campo vacío → hereda de bot_settings | plataforma |
 
 ### Credenciales Appwrite (en .env.local)
 - **Endpoint:** `https://varios-appwrite.fjueze.easypanel.host/v1`
@@ -178,26 +180,31 @@ rm -rf auth/
 | `Bad MAC / Session error` en logs | Aparece al reconectar con sesión existente | Normal de Baileys, no afecta funcionamiento |
 | SDK Appwrite incompatible | Warning "SDK built for 1.9.1, server is 1.8.0" | Usar `node-appwrite@14`, no la última versión |
 | Importar `baileys/client` en Next.js API route | Build Docker falla con exit code 1 | No importar `client.ts` desde routes — inlinear la lógica de fs |
+| Off-topic detection falla con tildes | Bot responde "área de atención" (con tilde) pero la frase a detectar no tiene tilde → `includes()` falla | Normalizar con `NFD` + strip diacríticos antes de comparar. Ver `normalize()` en `message-processor.ts` |
+| Outbox a número plano falla con `jidDecode` | `Cannot destructure property 'user' of jidDecode(...)` | `resolveJid()` no añade `@s.whatsapp.net` a números planos. Fix: `raw.includes("@") ? raw : raw + "@s.whatsapp.net"` antes de `sendMessage` |
 
 ---
 
 ## Estado actual del proyecto
 
-**Fecha de último análisis:** 2026-05-09
+**Fecha de último análisis:** 2026-05-10
 
 - ✅ Bot omnicanal en producción: WhatsApp + Telegram + WebChat
 - ✅ WhatsApp conectado — número `+507 61142198` (sesión en volumen Docker)
 - ✅ Telegram `@shavuot_bot` activo
 - ✅ WebChat disponible en `/jaiger-house.html` (widget flotante — renombrar si el cliente lo pide)
 - ✅ Dashboard en `https://varios-agente-wasap-omni.fjueze.easypanel.host/`
-- ✅ Autenticación via Appwrite Auth (`admin@jaigerhouse.com`)
+- ✅ Autenticación via Appwrite Auth
 - ✅ System prompt activo en Appwrite `bot_settings`: TechPadah (IA, redes, web, cableado — Pedregal/Rana de Oro)
 - ✅ Configuración dinámica (system prompt, escalaciones, modelo LLM) vía Appwrite `bot_settings`
-- ✅ Catálogo de productos con function calling (búsqueda semántica)
+- ✅ Off-topic limit: 3 mensajes fuera de scope → escalación forzada (conteo en Appwrite, determinístico)
+- ✅ BANNED mode: bot ignora silenciosamente contactos bloqueados. Botón "Bloquear" en dashboard.
+- ✅ Notificación WhatsApp al host desde Telegram/WebChat via outbox (outbox JID fix aplicado)
 - ✅ Push notifications para escalaciones
 - ✅ TypeScript sin errores de compilación
 - ✅ Bot robusto: no crashea en timeouts de red, no borra auth en bloqueos de IP
 - ✅ `/api/chat` y `/jaiger-house.html` marcados como rutas públicas en middleware
+- 📋 Plan blacklist futuro en `docs/blacklist-plan.md` (cuando hater use múltiples canales)
 - 📋 Pendiente: mergear `feature/omnichannel` → `master`
 
 **EasyPanel API Key:** guardada en memoria local (`memory/credentials.md`) — no commitear a git.
@@ -468,6 +475,41 @@ Cualquier ruta protegida → middleware.ts
 - `bc4f263` — log de arranque Telegram
 - `1eca965` — phone fallback con externalId para plataformas no-WhatsApp
 
+### 2026-05-10 — Off-topic limit + BANNED mode + fixes de outbox
+
+**Features nuevas:**
+
+1. **Off-topic limit (3 intentos)** — `src/lib/core/message-processor.ts` + `src/lib/db.ts`
+   - Campo `offtopicCount` (integer, default 0) en colección `conversations`
+   - `offtopic_phrases` y `offtopic_limit` (default 3) en `bot_settings`
+   - El código detecta cuando el bot usa la frase de off-topic, incrementa el contador en Appwrite, y al 3er intento reemplaza la respuesta del LLM con el mensaje de escalación forzada
+   - El conteo se resetea a 0 cuando la conversación pasa a HUMAN
+   - Determinístico: no depende del LLM para contar
+   - Script de migración: `scripts/migrate-offtopic.ts`
+
+2. **BANNED mode** — modo de conversación que bloquea silenciosamente al contacto
+   - `mode` ahora es `"AI" | "HUMAN" | "BANNED"` en `db.ts`, API route, y todos los componentes
+   - El bot ignora todos los mensajes de conversaciones en BANNED (`mode !== "AI"` → return early)
+   - Dashboard: botón "Bloquear / Bloqueado" en rojo en `ModeToggle`, banner rojo en `ConversationPanel`
+   - Plan para escalar a blacklist por número (cross-canal): `docs/blacklist-plan.md`
+
+**Bugs corregidos:**
+
+3. **Unicode normalization en detección de frases** — `src/lib/core/message-processor.ts`
+   - El bot responde con tildes (`"área de atención"`) pero `offtopic_phrases` y `escalation_phrases` almacenados en Appwrite no tienen tildes
+   - `String.includes()` no normaliza acentos → detección siempre fallaba
+   - Fix: función `normalize()` con NFD + strip diacríticos aplicada antes de comparar en ambas detecciones
+
+4. **Outbox poller crasheaba con `jidDecode` en números planos** — `scripts/start-bot.ts`
+   - `notifyHostViaOutbox()` encola el `HOST_PHONE` como número plano (ej. `50761142198`)
+   - `resolveJid()` solo maneja `@lid` — devuelve el número sin cambios
+   - Baileys llama `jidDecode()` internamente que requiere `@domain` → crash
+   - Fix: `const jid = raw.includes("@") ? raw : raw + "@s.whatsapp.net"` antes de `sendMessage`
+
+**Commits:** `be146a2`, `6068fa2`, `b85ba63`, `2b1e314`
+
+---
+
 ### 2026-05-08/09 — Fix loop 401 + crash bot + reconexión manual al VPS
 
 **Problema raíz:** La sesión de Baileys en el volumen Docker `whatsapp-auth` expiró. El bot entró en un loop 401 (WhatsApp bloqueó la IP del servidor por exceso de intentos fallidos). El bot local también crasheó con `UND_ERR_CONNECT_TIMEOUT` por `unhandledRejection` en Node.js 22.
@@ -493,3 +535,27 @@ EasyPanel nombra los volúmenes con un prefijo. NO es `/var/lib/docker/volumes/w
 **Commits:**
 - `d8699c0` — crash fix: `.catch()` en setConnectionState + handlers globales + clearPendingAuth post sock.end()
 - `ef99771` — preservar auth en 401 sin conexión previa (bloqueo de IP vs sesión revocada)
+
+### 2026-05-09 — Channel-specific settings (Option C)
+
+**Feature:** Cada canal (WhatsApp / Telegram / WebChat) puede tener su propia configuración independiente.
+Los campos vacíos heredan del `bot_settings` global. Solo se sobreescribe lo que tenga valor.
+
+**Nueva colección Appwrite: `channel_settings`**
+- Document ID = plataforma (`"whatsapp"`, `"telegram"`, `"webchat"`)
+- Atributos: `platform` (required), `system_prompt`, `welcome_message`, `llm_model`, `host_phone`, `escalation_phrases`, `offtopic_phrases`, `offtopic_limit`
+- Script de migración: `scripts/migrate-channel-settings.ts` (ya ejecutado en producción)
+
+**Archivos modificados:**
+
+1. **`src/lib/db.ts`** — `ChannelSettings` interface + `getChannelSettings(platform)` + `upsertChannelSettings(platform, data)`. Upsert: intenta UPDATE, si 404 hace CREATE (doc ID = nombre de plataforma).
+
+2. **`src/lib/system-prompt.ts`** — `getActiveSettings(platform?)` ahora acepta plataforma opcional. Cache separado por plataforma (Map). Merge: los campos de canal no vacíos sobreescriben global. Exporta `invalidateChannelCache(platform?)`.
+
+3. **`src/lib/core/message-processor.ts`** — pasa `platform` a `getActiveSettings(platform)`.
+
+4. **`src/app/api/channel-settings/[platform]/route.ts`** — GET/POST API. El POST invalida el cache del canal tras guardar.
+
+5. **`src/app/settings/page.tsx`** — UI con tabs: Global / 💬 WhatsApp / ✈️ Telegram / 🌐 WebChat. Cada tab de canal carga configuración lazy (solo al hacer click). Campo `LlmSelect` extraído como componente reutilizable con opción "Heredar del Global".
+
+**Commit:** `8b271af` — 6 archivos, 694 inserciones.
