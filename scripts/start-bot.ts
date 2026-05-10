@@ -55,7 +55,8 @@ function startOutboxPoller() {
       const pending = await getPendingOutbox("whatsapp", 20);
       for (const item of pending) {
         try {
-          const jid = resolveJid(item.phone);
+          const raw = resolveJid(item.phone);
+          const jid = raw.includes("@") ? raw : `${raw}@s.whatsapp.net`;
           await handle.sock.sendMessage(jid, { text: item.content });
           await insertMessage(item.conversation_id, "assistant", item.content);
           await markOutboxSent(item.id);
