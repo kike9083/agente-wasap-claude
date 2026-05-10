@@ -399,7 +399,10 @@ export async function notifyHostViaOutbox(
   lastMsg: string
 ): Promise<void> {
   const hostPhone = process.env.HOST_PHONE;
-  if (!hostPhone) return;
+  if (!hostPhone) {
+    console.warn("[notifyHostViaOutbox] HOST_PHONE no está configurado — notificación omitida");
+    return;
+  }
   const labels: Record<string, string> = { telegram: "Telegram", webchat: "WebChat", instagram: "Instagram", facebook: "Facebook" };
   const label = labels[platform] ?? platform;
   const { conversation } = await getOrCreateConversation("whatsapp", hostPhone, "Sistema", hostPhone);
@@ -408,6 +411,7 @@ export async function notifyHostViaOutbox(
     hostPhone,
     `[TechPadah] Atencion requerida\n\nCanal: ${label}\nCliente: ${clientName}\nUltimo mensaje: "${lastMsg.slice(0, 200)}"\n\nRevisa el dashboard para responder.`
   );
+  console.log(`[notifyHostViaOutbox] Notificación encolada → ${hostPhone} (canal: ${label}, cliente: ${clientName})`);
 }
 
 export async function requestRestart(): Promise<void> {
