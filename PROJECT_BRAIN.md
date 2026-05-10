@@ -169,30 +169,34 @@ rm -rf auth/
 |---|---|---|
 | Modelo LLM sin choices | `TypeError: Cannot read properties of undefined (reading '0')` | Modelo no disponible o rate limit. Verificar en openrouter.ai/activity |
 | Modelos `:free` agotados | `404 Provider returned error — Model not found` | Cambiar a `openai/gpt-4o-mini` en .env.local |
-| Código 440 loop | Baileys desconecta y reconecta infinitamente | Borrar dispositivos vinculados en el teléfono |
-| QR no aparece | Dashboard muestra "Aguardando..." | `npm run start:bot` no está corriendo |
+| Código 440 loop | Baileys desconecta y reconecta infinitamente | Dos instancias del mismo número activas. Detener la local con Ctrl+C |
+| QR no aparece | Dashboard muestra "No se detectó QR" | 1) Verificar que el bot está corriendo. 2) Si hay loop 401 → ver gotcha #13 |
+| Loop 401 sin QR | Bot conecta, obtiene 401, repite cada 5 min | IP del servidor bloqueada por WhatsApp. Escanear QR en PC local y subir auth al VPS (ver deploy_easypanel.md) |
+| EBUSY al limpiar auth | `Error: EBUSY: resource busy or locked, rmdir '/app/auth'` | `/app/auth` es mount point Docker. Usar `readdirSync`+`unlinkSync` por archivo, no `rmSync` |
+| Bot crashea con UND_ERR_CONNECT_TIMEOUT | Proceso termina con exit code 1 | `setConnectionState()` no awaited → unhandledRejection en Node.js 22. Añadir `.catch(()=>{})` |
 | @lid en notificación al host | Muestra número interno en vez del real | Se resuelve con `resolveJid()` en tiempo de envío en `notifyHost()` |
 | `Bad MAC / Session error` en logs | Aparece al reconectar con sesión existente | Normal de Baileys, no afecta funcionamiento |
 | SDK Appwrite incompatible | Warning "SDK built for 1.9.1, server is 1.8.0" | Usar `node-appwrite@14`, no la última versión |
+| Importar `baileys/client` en Next.js API route | Build Docker falla con exit code 1 | No importar `client.ts` desde routes — inlinear la lógica de fs |
 
 ---
 
 ## Estado actual del proyecto
 
-**Fecha de último análisis:** 2026-05-03
+**Fecha de último análisis:** 2026-05-09
 
-- ✅ Bot conectando a WhatsApp y respondiendo con IA
-- ✅ Base de datos migrada de SQLite a Appwrite
-- ✅ Dashboard funcionando con datos de Appwrite
-- ✅ Outbox y restart_flag operando via Appwrite
+- ✅ Bot omnicanal en producción: WhatsApp + Telegram + WebChat
+- ✅ WhatsApp conectado — número `+507 61142198` (sesión en volumen Docker)
+- ✅ Telegram `@shavuot_bot` activo
+- ✅ WebChat disponible en `/jaiger-house.html` (widget flotante)
+- ✅ Dashboard en `https://varios-agente-wasap-omni.fjueze.easypanel.host/`
+- ✅ Autenticación via Appwrite Auth (`admin@jaigerhouse.com`)
+- ✅ Configuración dinámica (system prompt, escalaciones, modelo LLM) vía Appwrite `bot_settings`
+- ✅ Catálogo de productos con function calling (búsqueda semántica)
+- ✅ Push notifications para escalaciones
 - ✅ TypeScript sin errores de compilación
-- ✅ Skill `whatsapp-bot-builder-v2` creada en `C:\Users\soporte\.claude\skills\`
-- ✅ MCP de Appwrite corregido y funcional (ver abajo)
-- ✅ **Login implementado con Appwrite Auth** (usuario: admin@jaigerhouse.com)
-- ✅ **Mensaje de bienvenida automático** en primer contacto (configurable vía `WELCOME_MESSAGE` en .env.local)
-- ✅ **Timeout de regreso a modo IA** pasivo si el host inactivo (configurable vía `HUMAN_TIMEOUT_HOURS`)
-- ✅ **Soporte de Audios (Groq Whisper)** e **Imágenes (Appwrite Storage "media")**.
-- 📋 Siguiente: Deploy en VPS / EasyPanel
+- ✅ Bot robusto: no crashea en timeouts de red, no borra auth en bloqueos de IP
+- 📋 Pendiente: mergear `feature/omnichannel` → `master`
 
 ---
 
@@ -459,3 +463,29 @@ Cualquier ruta protegida → middleware.ts
 - `abeecc1` → `29abfd0` — retry 409 con backoff (6 intentos → ilimitado)
 - `bc4f263` — log de arranque Telegram
 - `1eca965` — phone fallback con externalId para plataformas no-WhatsApp
+
+### 2026-05-08/09 — Fix loop 401 + crash bot + reconexión manual al VPS
+
+**Problema raíz:** La sesión de Baileys en el volumen Docker `whatsapp-auth` expiró. El bot entró en un loop 401 (WhatsApp bloqueó la IP del servidor por exceso de intentos fallidos). El bot local también crasheó con `UND_ERR_CONNECT_TIMEOUT` por `unhandledRejection` en Node.js 22.
+
+**Bugs corregidos:**
+
+1. **auth borrado con archivo bloqueado (Windows):** `fs.rmSync` se llamaba mientras el socket aún estaba abierto → en Windows los archivos quedan bloqueados y el borrado falla silenciosamente. Fix: `pendingAuthClear` flag + `clearPendingAuth()` que se llama en `handleReconnect` DESPUÉS de `sock.end()`.
+
+2. **Crash por `unhandledRejection` (Node.js 22):** Llamadas a `setConnectionState()` sin `await` y sin `.catch()` en el handler `connection.update`. Si Appwrite daba timeout, la promesa rechazada crasheaba el proceso. Fix: `.catch(() => {})` en todas las llamadas fire-and-forget + handlers globales `unhandledRejection` / `uncaughtException` en `start-bot.ts`.
+
+3. **Auth válido borrado en bloqueo de IP:** El bot borraba auth en CUALQUIER 401, incluso cuando el 401 era bloqueo de IP (nunca había conectado) en vez de sesión revocada. Fix: flag `hasEverConnected` — solo borra auth si el socket ya había llegado a estado `open` antes del 401.
+
+**Solución al bloqueo de IP:**
+- Se escaneó QR en máquina local (IP diferente al VPS → WhatsApp no la tiene bloqueada)
+- Archivos de sesión copiados al VPS via SCP → `/tmp/wa-auth/`
+- Copiados al volumen Docker: `cp -r /tmp/wa-auth/. <ruta_volumen>/_data/`
+- `docker restart $(docker ps -q -f name=agente-wasap-omni)`
+- Bot conectó: `status: "connected"`, phone: `50761142198` ✅
+
+**Gotcha nuevo — nombre del volumen Docker:**
+EasyPanel nombra los volúmenes con un prefijo. NO es `/var/lib/docker/volumes/whatsapp-auth/`. Usar `docker volume ls | grep whatsapp` para encontrar el nombre real.
+
+**Commits:**
+- `d8699c0` — crash fix: `.catch()` en setConnectionState + handlers globales + clearPendingAuth post sock.end()
+- `ef99771` — preservar auth en 401 sin conexión previa (bloqueo de IP vs sesión revocada)

@@ -26,10 +26,12 @@ El usuario **NO debe pedirte** que guardes los cambios. Hazlo siempre tú:
 
 ## Resumen rápido del proyecto
 
-- **Qué es**: Bot WhatsApp + dashboard Next.js para Jaiger House Collection (Panamá)
-- **Stack**: Next.js 16 · Baileys 6.7 · Appwrite 1.8 · OpenRouter (gpt-4o-mini por defecto)
-- **Arrancar**: `npm run dev:all` (bot + dashboard en paralelo)
-- **BD**: Appwrite self-hosted en EasyPanel
+- **Qué es**: Bot omnicanal (WhatsApp + Telegram + WebChat) + dashboard Next.js para Jaiger House Collection (Panamá)
+- **Stack**: Next.js 15 · Baileys 6.7 · Telegraf · Appwrite 1.8 · OpenRouter (gpt-4o-mini por defecto)
+- **Arrancar**: `npm run dev:all` (bot + telegram + dashboard en paralelo)
+- **BD**: Appwrite self-hosted en EasyPanel (`varios-appwrite.fjueze.easypanel.host`)
+- **Producción**: `https://varios-agente-wasap-omni.fjueze.easypanel.host/` (servicio `agente-wasap-omni`, rama `feature/omnichannel`)
+- **Demo WebChat**: `/jaiger-house.html` (landing con widget flotante)
 
 ## Gotchas conocidos (no repitas estos errores)
 
@@ -44,3 +46,8 @@ El usuario **NO debe pedirte** que guardes los cambios. Hazlo siempre tú:
 | 7 | `env-loader.ts` debe ser el primer import de `start-bot.ts` | Sin esto, `process.env` está vacío |
 | 8 | Función en `middleware.ts` con nombre incorrecto | Next.js exige `export function middleware(...)` — cualquier otro nombre causa HTTP 500 en TODAS las rutas |
 | 9 | `package-lock.json` desincronizado con `package.json` | Correr `npm install --legacy-peer-deps` local y commitear el lock actualizado |
+| 10 | `fs.rmSync(authDir, {recursive})` falla con EBUSY en Docker | `/app/auth` es mount point del volumen — usar `fs.readdirSync` + `fs.unlinkSync` por archivo |
+| 11 | Importar `@/lib/baileys/client` en API route de Next.js | Arrastra Baileys al bundle y rompe el build — inlinear la lógica de fs en el route |
+| 12 | `setConnectionState()` no awaited en `connection.update` | En Node.js 22 el unhandledRejection crashea el proceso — siempre añadir `.catch(()=>{})` |
+| 13 | Loop 401 por bloqueo de IP (no sesión revocada) | Usar flag `hasEverConnected` — solo borrar auth si el socket alcanzó estado `open` antes del 401 |
+| 14 | Nombre del volumen Docker en EasyPanel | NO es `whatsapp-auth` — es `varios_agente-wasap-omni_whatsapp-auth`. Usar `docker volume ls \| grep wasap` |
