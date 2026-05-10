@@ -21,7 +21,7 @@ Agente conversacional de WhatsApp que conecta un número real con un LLM vía Op
 - **Dashboard Next.js:** Ver conversaciones, alternar modo IA ↔ Humano, responder manualmente
 - **Appwrite como base de datos:** Reemplazó SQLite en mayo 2026. Almacena conversaciones, mensajes, estado de conexión, cola de mensajes salientes
 
-**Cliente:** Jaiger House Collection (alquiler vacacional de lujo, Isla Grande, Panamá)
+**Cliente:** TechPadah (soluciones tecnológicas integrales — IA, redes, desarrollo web, cableado, Pedregal / Rana de Oro, Panamá)
 
 ---
 
@@ -84,7 +84,7 @@ Agente conversacional de WhatsApp que conecta un número real con un LLM vía Op
 | `src/lib/baileys/client.ts` | Socket WhatsApp, mapa LID→JID, reconexión | ⚠️ resolveJid(), lidToJid Map |
 | `src/lib/baileys/handler.ts` | Procesa mensajes, llama LLM, escala | ⚠️ Todas las llamadas db son await |
 | `src/lib/openrouter.ts` | Llamadas LLM + stripChainOfThought | ⚠️ Manejo de errores choices[] |
-| `src/lib/system-prompt.ts` | Instrucciones del bot para Jaiger House | Cambiar por cliente |
+| `src/lib/system-prompt.ts` | Instrucciones del bot (fallback). Prompt real en Appwrite `bot_settings` | Cambiar por cliente |
 | `scripts/start-bot.ts` | Proceso principal del bot, pollers async | ⚠️ Outbox y restart son async |
 | `scripts/env-loader.ts` | Carga .env.local (ES module fix) | Debe ser PRIMER import de start-bot |
 | `scripts/setup-appwrite.ts` | Crea colecciones en Appwrite (correr una vez) | Solo si se resetea la BD |
@@ -188,15 +188,19 @@ rm -rf auth/
 - ✅ Bot omnicanal en producción: WhatsApp + Telegram + WebChat
 - ✅ WhatsApp conectado — número `+507 61142198` (sesión en volumen Docker)
 - ✅ Telegram `@shavuot_bot` activo
-- ✅ WebChat disponible en `/jaiger-house.html` (widget flotante)
+- ✅ WebChat disponible en `/jaiger-house.html` (widget flotante — renombrar si el cliente lo pide)
 - ✅ Dashboard en `https://varios-agente-wasap-omni.fjueze.easypanel.host/`
 - ✅ Autenticación via Appwrite Auth (`admin@jaigerhouse.com`)
+- ✅ System prompt activo en Appwrite `bot_settings`: TechPadah (IA, redes, web, cableado — Pedregal/Rana de Oro)
 - ✅ Configuración dinámica (system prompt, escalaciones, modelo LLM) vía Appwrite `bot_settings`
 - ✅ Catálogo de productos con function calling (búsqueda semántica)
 - ✅ Push notifications para escalaciones
 - ✅ TypeScript sin errores de compilación
 - ✅ Bot robusto: no crashea en timeouts de red, no borra auth en bloqueos de IP
+- ✅ `/api/chat` y `/jaiger-house.html` marcados como rutas públicas en middleware
 - 📋 Pendiente: mergear `feature/omnichannel` → `master`
+
+**EasyPanel API Key:** guardada en memoria local (`memory/credentials.md`) — no commitear a git.
 
 ---
 
