@@ -492,6 +492,57 @@ export async function resetOfftopicCount(conversationId: string): Promise<void> 
   });
 }
 
+export interface ChannelSettings {
+  platform: Platform;
+  system_prompt?: string;
+  welcome_message?: string;
+  llm_model?: string;
+  host_phone?: string;
+  escalation_phrases?: string;
+  offtopic_phrases?: string;
+  offtopic_limit?: number;
+}
+
+export async function getChannelSettings(platform: Platform): Promise<ChannelSettings | null> {
+  try {
+    const doc = await databases.getDocument(DATABASE_ID, "channel_settings", platform);
+    return {
+      platform: doc.platform as Platform,
+      system_prompt: doc.system_prompt ?? "",
+      welcome_message: doc.welcome_message ?? "",
+      llm_model: doc.llm_model ?? "",
+      host_phone: doc.host_phone ?? "",
+      escalation_phrases: doc.escalation_phrases ?? "[]",
+      offtopic_phrases: doc.offtopic_phrases ?? "[]",
+      offtopic_limit: doc.offtopic_limit != null ? doc.offtopic_limit : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function upsertChannelSettings(
+  platform: Platform,
+  settings: Partial<Omit<ChannelSettings, "platform">>
+): Promise<void> {
+  const data: Record<string, any> = {};
+  if (settings.system_prompt !== undefined) data.system_prompt = settings.system_prompt;
+  if (settings.welcome_message !== undefined) data.welcome_message = settings.welcome_message;
+  if (settings.llm_model !== undefined) data.llm_model = settings.llm_model;
+  if (settings.host_phone !== undefined) data.host_phone = settings.host_phone;
+  if (settings.escalation_phrases !== undefined) data.escalation_phrases = settings.escalation_phrases;
+  if (settings.offtopic_phrases !== undefined) data.offtopic_phrases = settings.offtopic_phrases;
+  if (settings.offtopic_limit !== undefined) data.offtopic_limit = settings.offtopic_limit;
+
+  try {
+    await databases.updateDocument(DATABASE_ID, "channel_settings", platform, data);
+  } catch (err: any) {
+    if (err?.code === 404) {
+      await databases.createDocument(DATABASE_ID, "channel_settings", platform, { platform, ...data });
+    } else throw err;
+  }
+}
+
 export async function searchProducts(query: string): Promise<any[]> {
   try {
     const result = await databases.listDocuments(

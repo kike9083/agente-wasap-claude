@@ -39,7 +39,7 @@ export async function processMessage(
 ): Promise<ProcessMessageOutput> {
   const { platform, conversationId, isNew, name, text, sendReply, onEscalation } = input;
 
-  const settings = await getActiveSettings();
+  const settings = await getActiveSettings(platform);
 
   // ── Bienvenida (solo primer contacto) ───────────────────────────────────
   if (isNew && settings.welcome_message) {

@@ -1,10 +1,10 @@
-import { getBotSettings, BotSettings } from "./db";
+import { getBotSettings, getChannelSettings, BotSettings, type Platform } from "./db";
 
 // Fallback values
 export const DEFAULT_SYSTEM_PROMPT = `
-Eres el Asistente Virtual Oficial de "PENSA Muebles y Línea Blanca" (Dist. De Prod. Ext. y Nales, S.A.), una tienda líder en muebles y línea blanca en Panamá. 
+Eres el Asistente Virtual Oficial de "PENSA Muebles y Línea Blanca" (Dist. De Prod. Ext. y Nales, S.A.), una tienda líder en muebles y línea blanca en Panamá.
 
-TU OBJETIVO: 
+TU OBJETIVO:
 Atender a los clientes de manera amable, profesional, servicial y persuasiva. Debes resolver sus dudas sobre productos, precios, envíos, métodos de pago y servicio técnico.
 
 TONO Y ESTILO:
@@ -68,24 +68,14 @@ Para soporte técnico o repuestos, el cliente debe escribir exclusivamente al n�
 export const DEFAULT_WELCOME_MESSAGE = "¡Hola {name}! Soy el asistente virtual de NovaMente AI. ¿En qué te puedo ayudar hoy?";
 export const DEFAULT_HUMAN_TIMEOUT_HOURS = 24;
 
-let cachedSettings: BotSettings | null = null;
-let lastFetchTime = 0;
 const CACHE_TTL = 60 * 1000; // 60 segundos
 
-export async function getActiveSettings(): Promise<BotSettings> {
-  const now = Date.now();
-  if (cachedSettings && now - lastFetchTime < CACHE_TTL) {
-    return cachedSettings;
-  }
+let cachedGlobal: BotSettings | null = null;
+let lastGlobalFetch = 0;
 
-  const settings = await getBotSettings();
-  if (settings) {
-    cachedSettings = settings;
-    lastFetchTime = now;
-    return settings;
-  }
+const channelCache = new Map<Platform, { data: BotSettings; fetchedAt: number }>();
 
-  // Fallback if DB fails or is empty
+function buildFallback(): BotSettings {
   return {
     system_prompt: process.env.SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
     welcome_message: process.env.WELCOME_MESSAGE ?? DEFAULT_WELCOME_MESSAGE,
@@ -103,3 +93,63 @@ export async function getActiveSettings(): Promise<BotSettings> {
   };
 }
 
+export async function getActiveSettings(platform?: Platform): Promise<BotSettings> {
+  const now = Date.now();
+
+  // Si no hay plataforma, retornar config global con cache simple
+  if (!platform) {
+    if (cachedGlobal && now - lastGlobalFetch < CACHE_TTL) return cachedGlobal;
+    const global = await getBotSettings();
+    const result = global ?? buildFallback();
+    cachedGlobal = result;
+    lastGlobalFetch = now;
+    return result;
+  }
+
+  // Cache por plataforma
+  const cached = channelCache.get(platform);
+  if (cached && now - cached.fetchedAt < CACHE_TTL) return cached.data;
+
+  // Obtener config global
+  const global = await getBotSettings() ?? buildFallback();
+
+  // Obtener config del canal
+  const ch = await getChannelSettings(platform);
+  if (!ch) {
+    channelCache.set(platform, { data: global, fetchedAt: now });
+    return global;
+  }
+
+  // Merge: canal sobreescribe global solo donde tiene valor
+  const merged: BotSettings = { ...global };
+
+  if (ch.system_prompt) merged.system_prompt = ch.system_prompt;
+  if (ch.welcome_message) merged.welcome_message = ch.welcome_message;
+  if (ch.llm_model) merged.llm_model = ch.llm_model;
+  if (ch.host_phone) merged.host_phone = ch.host_phone;
+
+  try {
+    const eps = JSON.parse(ch.escalation_phrases || "[]");
+    if (Array.isArray(eps) && eps.length > 0) merged.escalation_phrases = ch.escalation_phrases;
+  } catch {}
+
+  try {
+    const ops = JSON.parse(ch.offtopic_phrases || "[]");
+    if (Array.isArray(ops) && ops.length > 0) merged.offtopic_phrases = ch.offtopic_phrases;
+  } catch {}
+
+  if (ch.offtopic_limit != null) merged.offtopic_limit = ch.offtopic_limit;
+
+  channelCache.set(platform, { data: merged, fetchedAt: now });
+  return merged;
+}
+
+/** Invalida el cache de una plataforma específica (llamar tras guardar channel settings) */
+export function invalidateChannelCache(platform?: Platform): void {
+  if (platform) {
+    channelCache.delete(platform);
+  } else {
+    cachedGlobal = null;
+    channelCache.clear();
+  }
+}
