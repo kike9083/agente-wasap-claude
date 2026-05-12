@@ -610,10 +610,30 @@ Los campos vacíos heredan del `bot_settings` global. Solo se sobreescribe lo qu
 
 3. **Commit:** `4e07131` — feat: add bot_settings, products, and templates collections to Appwrite setup script
 
-**Estado:** La rama `feature/omnichannel` está lista con todas las colecciones necesarias. Para inicializar el nuevo servidor TechPadah:
+**Ejecución completada (feature/omnichannel):**
+
+1. ✅ `npm install` — dependencias instaladas
+2. ✅ `npx tsx scripts/setup-new-collections.ts` — colecciones creadas en TechPadah
+   - `bot_settings` (ID: 6a038a16001ff19aab6f)
+   - `products`
+   - `templates`
+3. ✅ `npx tsx scripts/init-bot-settings.ts` — documento de configuración creado (ID: 6a0396d7000a54f43652)
+4. ✅ `npm run dev:all` — verificación exitosa (WEB + BOT procesos iniciados)
+5. ✅ `npx tsc --noEmit` — 0 errores TypeScript
+
+**Nuevos scripts creados:**
+- `scripts/setup-new-collections.ts` — setup incremental (solo colecciones nuevas)
+- `scripts/init-bot-settings.ts` — inicializa documento de configuración
+
+**Estado actual:** Rama `feature/omnichannel` completamente sincronizada con servidor TechPadah y lista para producción.
+
+**Para arrancar localmente:**
 ```bash
+# Editar .env.local con:
+# - OPENROUTER_API_KEY (obtener de https://openrouter.ai)
+# - HOST_PHONE (teléfono del asesor, ej: 50761142198)
+# - VAPID keys (opcionales, para push notifications)
+
 npm install
-npx tsx scripts/setup-appwrite.ts       # Crear colecciones
-npx tsx scripts/init-bot-settings.ts    # Inicializar configuración
-npm run dev:all                         # Arrancar bot + dashboard
+npm run dev:all  # Bot + Telegram + Dashboard en http://localhost:3000
 ```
