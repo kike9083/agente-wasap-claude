@@ -1,0 +1,32 @@
+{
+  "projectName": "varios",
+  "name": "agente-wasap-omni",
+  "type": "app",
+  "enabled": true,
+  "source": {
+    "type": "github",
+    "owner": "kike9083",
+    "repo": "agente-wasap-claude",
+    "ref": "feature/omnichannel",
+    "path": "/",
+    "autoDeploy": false
+  },
+  "env": "OPENROUTER_API_KEY=sk-or-v1-YOUR_API_KEY_HERE\nOPENROUTER_MODEL=openai/gpt-4o-mini\nHOST_PHONE=50761142198\nAPPWRITE_ENDPOINT=https://varios-appwrite-techpadah.fjueze.easypanel.host/v1\nAPPWRITE_PROJECT_ID=6a03855900044a4c6680\nAPPWRITE_API_KEY=YOUR_APPWRITE_API_KEY_HERE\nAPPWRITE_DATABASE_ID=6a03887a002f400d872c\nHUMAN_TIMEOUT_HOURS=1\nGROQ_API_KEY=YOUR_GROQ_API_KEY_HERE\nNEXT_PUBLIC_VAPID_PUBLIC_KEY=YOUR_VAPID_PUBLIC_KEY_HERE\nVAPID_PRIVATE_KEY=YOUR_VAPID_PRIVATE_KEY_HERE\nVAPID_EMAIL=mailto:admin@yourdomain.com\nTELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_TOKEN_HERE\nENABLED_CHANNELS=whatsapp,webchat,telegram",
+  "deploy": {
+    "replicas": 1,
+    "command": null,
+    "zeroDowntime": false
+  },
+  "mounts": [
+    {
+      "type": "volume",
+      "name": "whatsapp-auth",
+      "mountPath": "/app/auth"
+    }
+  ],
+  "ports": [],
+  "build": {
+    "type": "dockerfile",
+    "file": "Dockerfile"
+  }
+}
