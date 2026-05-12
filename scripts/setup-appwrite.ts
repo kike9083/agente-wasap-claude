@@ -114,6 +114,30 @@ async function main() {
   await createCollection("restart_flag", "Restart Flag");
   await createAttr(() => db.createIntegerAttribute(DATABASE_ID, "restart_flag", "requestedAt", false), "requestedAt");
 
+  // ── bot_settings ───────────────────────────────────────────
+  await createCollection("bot_settings", "Bot Settings");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "bot_settings", "system_prompt", 5000, false), "system_prompt");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "bot_settings", "welcome_message", 1000, false), "welcome_message");
+  await createAttr(() => db.createIntegerAttribute(DATABASE_ID, "bot_settings", "human_timeout_hours", false), "human_timeout_hours");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "bot_settings", "llm_model", 100, false, "openai/gpt-4o-mini"), "llm_model");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "bot_settings", "host_phone", 50, false), "host_phone");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "bot_settings", "escalation_phrases", 2000, false), "escalation_phrases");
+
+  // ── products ───────────────────────────────────────────────
+  await createCollection("products", "Products");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "products", "sku", 50, true), "sku");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "products", "name", 500, true), "name");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "products", "price", 20, false), "price");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "products", "url", 500, false), "url");
+  await sleep(1500);
+  await createIndex("products", "sku_unique", "unique", ["sku"]);
+
+  // ── templates ──────────────────────────────────────────────
+  await createCollection("templates", "Quick Reply Templates");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "templates", "label", 100, true), "label");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "templates", "content", 1000, true), "content");
+  await createAttr(() => db.createIntegerAttribute(DATABASE_ID, "templates", "createdAt", true), "createdAt");
+
   console.log("\n✅ Setup completado.\n");
 }
 
