@@ -590,3 +590,30 @@ Los campos vacíos heredan del `bot_settings` global. Solo se sobreescribe lo qu
 5. **`src/app/settings/page.tsx`** — UI con tabs: Global / 💬 WhatsApp / ✈️ Telegram / 🌐 WebChat. Cada tab de canal carga configuración lazy (solo al hacer click). Campo `LlmSelect` extraído como componente reutilizable con opción "Heredar del Global".
 
 **Commit:** `8b271af` — 6 archivos, 694 inserciones.
+
+### 2026-05-12 — Integración de colecciones adicionales en branch `feature/omnichannel`
+
+**Contexto:** El usuario proporciona nuevas credenciales del servidor Appwrite TechPadah. El `.env.local` en rama `feature/omnichannel` ya tenía las credenciales actualizadas, pero el script de setup no includía todas las colecciones necesarias.
+
+**Cambios realizados:**
+
+1. **Actualización de `scripts/setup-appwrite.ts`:**
+   - Agregadas colecciones faltantes: `bot_settings`, `products`, `templates`
+   - `bot_settings` (colección de configuración dinámica): `system_prompt`, `welcome_message`, `human_timeout_hours`, `llm_model`, `host_phone`, `escalation_phrases`
+   - `products` (catálogo): `sku` (unique), `name`, `price`, `url`
+   - `templates` (respuestas rápidas): `label`, `content`, `createdAt`
+
+2. **Verificación:**
+   - `npm install` completado sin errores críticos (5 vulnerabilidades, conocidas)
+   - `npx tsc --noEmit` → 0 errores de TypeScript ✅
+   - Rama `feature/omnichannel` sincronizada con todas las colecciones necesarias
+
+3. **Commit:** `4e07131` — feat: add bot_settings, products, and templates collections to Appwrite setup script
+
+**Estado:** La rama `feature/omnichannel` está lista con todas las colecciones necesarias. Para inicializar el nuevo servidor TechPadah:
+```bash
+npm install
+npx tsx scripts/setup-appwrite.ts       # Crear colecciones
+npx tsx scripts/init-bot-settings.ts    # Inicializar configuración
+npm run dev:all                         # Arrancar bot + dashboard
+```
