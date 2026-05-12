@@ -33,3 +33,7 @@ yarn-error.log*
 
 # Testing
 .coverage/
+
+# Deployment configs (contain secrets)
+service.json
+easypanel.json
