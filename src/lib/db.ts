@@ -585,3 +585,17 @@ export async function searchProducts(query: string): Promise<any[]> {
     return [];
   }
 }
+
+export async function createAuditLog(log: {
+  action: string;
+  userId: string;
+  userEmail?: string;
+  resourceType: string;
+  resourceId?: string;
+  detail?: string;
+}): Promise<void> {
+  await databases.createDocument(DATABASE_ID, COLLECTIONS.audit_logs, ID.unique(), {
+    ...log,
+    createdAt: Math.floor(Date.now() / 1000),
+  }).catch(() => {});
+}

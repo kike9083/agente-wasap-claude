@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getBotSettings, updateBotSettings } from "@/lib/db";
+import { cookies } from "next/headers";
+import { getBotSettings, updateBotSettings, createAuditLog } from "@/lib/db";
 
 export async function GET() {
   try {
@@ -16,7 +17,33 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const cookieStore = await cookies();
+    const userId = cookieStore.get("appwrite-user-id")?.value ?? "unknown";
+    const userEmail = cookieStore.get("appwrite-user-email")?.value;
+
+    const oldSettings = await getBotSettings();
     await updateBotSettings(body);
+
+    // Registrar cambio en audit log con antes/después
+    const changes: Record<string, { before: unknown; after: unknown }> = {};
+    for (const key of Object.keys(body)) {
+      const oldValue = oldSettings ? (oldSettings[key as keyof typeof oldSettings] ?? null) : null;
+      if (oldValue !== body[key]) {
+        changes[key] = {
+          before: oldValue,
+          after: body[key],
+        };
+      }
+    }
+
+    await createAuditLog({
+      action: "settings.update",
+      userId,
+      userEmail,
+      resourceType: "bot_settings",
+      detail: JSON.stringify({ changes }),
+    });
+
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json(

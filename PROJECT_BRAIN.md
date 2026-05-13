@@ -646,3 +646,98 @@ Servidor Appwrite migrado de `varios-appwrite.fjueze.easypanel.host` a `varios-a
 - Telegram `@eji_09_16_23_2026_bot` funcionando ✅
 - webchat accesible sin auth (middleware PUBLIC_PATHS correcto) ✅
 - TypeScript: 0 errores ✅
+
+### 2026-05-12 — Sistema de Auditoría (Audit Logs)
+
+**Feature:** Registro completo y auditable de TODOS los cambios realizados en el dashboard (quién hizo qué, cuándo, en qué recurso).
+Requerido para compliance y troubleshooting.
+
+**Nueva colección Appwrite: `audit_logs`**
+- Atributos: `action` (string), `userId` (string), `userEmail` (string, optional), `resourceType` (string), `resourceId` (string, optional), `detail` (string, optional JSON), `createdAt` (integer, timestamp)
+- Índice: `createdAt_desc` para queries rápidas
+- Script de migración: `scripts/migrate-audit-logs.ts` (ejecutado exitosamente)
+
+**Cambios en código:**
+
+1. **`src/lib/appwrite.ts`** — agregado `audit_logs` a `COLLECTIONS`
+
+2. **`src/lib/db.ts`** — función `createAuditLog()`:
+   ```typescript
+   export async function createAuditLog(log: {
+     action: string;
+     userId: string;
+     userEmail?: string;
+     resourceType: string;
+     resourceId?: string;
+     detail?: string;
+   }): Promise<void>
+   ```
+   - Fire-and-forget (`.catch(() => {})`) — nunca bloquea la operación principal
+   - Timestamp automático: `Math.floor(Date.now() / 1000)`
+
+3. **`src/app/api/auth/login/route.ts`** — captura y persiste el email del usuario en cookie `appwrite-user-email` tras login exitoso
+
+4. **Instrumentación en 5 API routes** (logging en POST/DELETE):
+   - `src/app/api/settings/route.ts` — action: `"settings.update"`, resourceType: `"bot_settings"`, detail: keys cambiados
+   - `src/app/api/channel-settings/[platform]/route.ts` — action: `"channel_settings.update"`, resourceType: `"channel_settings"`, detail: plataforma + keys
+   - `src/app/api/mode/[conversationId]/route.ts` — action: `"mode.change"`, resourceType: `"conversation"`, detail: newMode
+   - `src/app/api/conversations/[conversationId]/route.ts` — action: `"conversation.delete"`, resourceType: `"conversation"`
+   - `src/app/api/templates/route.ts` — actions: `"template.create"` / `"template.delete"`, resourceType: `"template"`, detail: texto del template
+
+5. **`src/app/api/audit-logs/route.ts`** — nuevo endpoint GET con soporte a paginación:
+   - Query params: `offset` (default 0), `limit` (default 100)
+   - Response: `{ logs: AuditLog[], total: number }`
+   - Timestamps convertidos a millisegundos para frontend
+
+6. **`src/app/audit-logs/page.tsx`** — dashboard UI con:
+   - Tabla: Fecha | Usuario | Acción | Recurso | Detalle
+   - Badges de color por tipo de acción (rojo=delete, azul=update, verde=create)
+   - Detalles JSON expandibles (accordions)
+   - Paginación con botones Anterior/Siguiente
+   - 50 registros por página por defecto
+
+7. **`src/components/DashboardHeader.tsx`** — agregado botón "Auditoría" (amber) en la navbar, posicionado entre "Estadísticas" y "Ajustes"
+
+**Verificaciones completadas:**
+- ✅ `npx tsc --noEmit` → 0 errores TypeScript
+- ✅ `npm run build` → build exitoso (103 kB First Load JS para `/audit-logs`)
+- ✅ `npx tsx scripts/migrate-audit-logs.ts` → colección `audit_logs` creada en Appwrite con todos los atributos e índices
+- ✅ `npm run dev` → servidor arrancando en puerto 3007 (3000 estaba en uso), dashboard accesible
+- ✅ Toda la cadena de auditoría implementada: login → captura de email → acciones instrumentadas → endpoint GET → página de visualización
+
+**Patrón de auditoría (ejemplo en `settings/route.ts`):**
+```typescript
+const cookieStore = await cookies();
+const userId = cookieStore.get("appwrite-user-id")?.value ?? "unknown";
+const userEmail = cookieStore.get("appwrite-user-email")?.value;
+
+// ... hacer operación ...
+
+await createAuditLog({
+  action: "settings.update",
+  userId,
+  userEmail,
+  resourceType: "bot_settings",
+  detail: JSON.stringify({ keys: Object.keys(body) }),
+});
+```
+
+**Gotchas evitados:**
+- Fire-and-forget: `.catch(() => {})` previene que fallos en Appwrite bloqueen respuestas al cliente
+- Cookie de email: obtenida durante login via `usersApi.get(userId)` (no lookup en cada audit log)
+- Timestamps: guardados en segundos Unix (Appwrite default), convertidos a millisegundos en el endpoint GET para frontend
+
+**Mejora posterior — Valores Antes/Después:**
+- **`src/app/api/settings/route.ts`** — ahora compara settings antiguos con nuevos y guarda `{ changes: { fieldName: { before, after } } }`
+- **`src/app/api/channel-settings/[platform]/route.ts`** — idem, con valores antes/después por campo
+- **`src/app/api/mode/[conversationId]/route.ts`** — guarda `{ before: oldMode, after: newMode }`
+- **`src/app/api/templates/route.ts`** — POST: guarda texto + length | PUT: antes/después del texto | DELETE: texto eliminado + length
+- **`src/app/api/conversations/[conversationId]/route.ts`** — DELETE: guarda nombre, plataforma, externalId de lo eliminado
+- **`src/app/audit-logs/page.tsx`** — parseDetail mejorada: muestra cambios con código coloreado (rojo=antes, verde=después) y accordion collapsible
+
+**Estado al cierre:**
+- Sistema de auditoría completo con trazabilidad antes/después ✅
+- Todos los cambios del dashboard quedan registrados en tiempo real ✅
+- Dashboard con visualización de audit logs con detalles expandibles ✅
+- TypeScript: 0 errores ✅
+- Build: exitoso ✅

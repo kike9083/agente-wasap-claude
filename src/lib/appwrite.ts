@@ -17,6 +17,7 @@ export const COLLECTIONS = {
   connection_state: "connection_state",
   outbox: "outbox",
   restart_flag: "restart_flag",
+  audit_logs: "audit_logs",
 } as const;
 
 // ID fijo para documentos singleton

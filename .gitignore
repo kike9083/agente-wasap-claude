@@ -36,3 +36,4 @@ yarn-error.log*
 
 # Scripts temporales con credenciales
 scripts/save_system_prompt.py
+service.json

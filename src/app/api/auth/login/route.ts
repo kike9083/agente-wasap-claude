@@ -67,6 +67,16 @@ export async function POST(request: Request) {
       );
     }
 
+    // Obtener email del usuario para audit logs
+    let userEmail = cleanEmail;
+    try {
+      const usersApi = new Users(adminClient);
+      const user = await usersApi.get(userId);
+      userEmail = user.email ?? cleanEmail;
+    } catch {
+      // Si falla el lookup, usar el email del formulario
+    }
+
     const response = NextResponse.json({ success: true });
     const cookieOpts = {
       httpOnly: true,
@@ -77,6 +87,7 @@ export async function POST(request: Request) {
     };
     response.cookies.set("appwrite-session", secret, cookieOpts);
     response.cookies.set("appwrite-user-id", userId, cookieOpts);
+    response.cookies.set("appwrite-user-email", userEmail, cookieOpts);
     return response;
   } catch (err: unknown) {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
