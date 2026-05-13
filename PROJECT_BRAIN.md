@@ -817,3 +817,33 @@ const roleAssignments = {
 - ✅ TypeScript: 0 errores
 - ✅ Build: exitoso
 - ✅ Push a GitHub: exitoso
+
+### 2026-05-13 — Fix error VAPID en push notifications
+
+**Problema:** Error `InvalidAccessError: Failed to execute 'subscribe' on 'PushManager': The provided applicationServerKey is not valid` al intentar registrar notificaciones push en el dashboard.
+
+**Causa:** Las claves VAPID estaban vacías en `.env.local`:
+```
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_EMAIL=
+```
+
+**Solución aplicada:**
+
+1. **Generación de claves VAPID:** Ejecutado `npx web-push generate-vapid-keys` para crear un par nuevo
+2. **Actualización de .env.local:**
+   ```
+   NEXT_PUBLIC_VAPID_PUBLIC_KEY=BARCLHDxZhA1pc1KL1wXX3EMARNDUvfRT7iIun3VzrnSuPyPIEfXLcL14pakDfjGS1VeRYl0PDyZe8PaZHKyq6s
+   VAPID_PRIVATE_KEY=aBAVW7CTxctX2Z51zSWagAcAbnDG369rcsSa6RdFzvo
+   VAPID_EMAIL=mailto:iaclarke1983@gmail.com
+   ```
+3. **Validación en `src/components/DashboardHeader.tsx`:** Agregado check de `process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY` antes de intentar suscribirse. Si falta, log de warning y retorna sin error
+
+**Verificaciones completadas:**
+- ✅ `npx tsc --noEmit` → 0 errores TypeScript
+- ✅ `npm run dev:all` → servidor iniciando sin errores
+
+**Estado:**
+- Push notifications ahora funcionarán correctamente en el dashboard
+- Error en consola eliminado

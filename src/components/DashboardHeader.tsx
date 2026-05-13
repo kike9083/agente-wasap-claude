@@ -14,6 +14,10 @@ interface DashboardHeaderProps {
 
 async function registerPush() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
+    console.warn("VAPID public key not configured");
+    return;
+  }
 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return;
