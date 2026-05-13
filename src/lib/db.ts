@@ -398,7 +398,8 @@ export async function markOutboxSent(id: string): Promise<void> {
 export async function notifyHostViaOutbox(
   platform: string,
   clientName: string,
-  lastMsg: string
+  lastMsg: string,
+  conversationId?: string
 ): Promise<void> {
   console.log(`[notifyHostViaOutbox] Iniciando escalación desde ${platform}, cliente: ${clientName}`);
 
@@ -412,6 +413,18 @@ export async function notifyHostViaOutbox(
     console.warn("[notifyHostViaOutbox] No hay agentes ni HOST_PHONE configurado — notificación omitida");
     return;
   }
+
+  // Generar resumen de la conversación si hay historial disponible
+  let summaryText = "";
+  if (conversationId) {
+    try {
+      const { generateConversationSummary } = await import("./openrouter");
+      const history = await getRecentHistory(conversationId, 10);
+      const summary = await generateConversationSummary(history);
+      if (summary) summaryText = `\n\n📋 Resumen de la conversación:\n${summary}`;
+    } catch { /* si falla el resumen, continúa sin él */ }
+  }
+
   const labels: Record<string, string> = { telegram: "Telegram", webchat: "WebChat", instagram: "Instagram", facebook: "Facebook" };
   const label = labels[platform] ?? platform;
   const dashboardUrl = process.env.DASHBOARD_URL || "https://varios-agente-wasap-omni.fjueze.easypanel.host";
@@ -419,7 +432,7 @@ export async function notifyHostViaOutbox(
   await enqueueOutbox(
     conversation.id,
     hostPhone,
-    `[TechPadah] Atencion requerida\n\nCanal: ${label}\nCliente: ${clientName}\nUltimo mensaje: "${lastMsg.slice(0, 200)}"\n\nResponde desde el dashboard:\n${dashboardUrl}`
+    `[TechPadah] Atencion requerida\n\nCanal: ${label}\nCliente: ${clientName}\nUltimo mensaje: "${lastMsg.slice(0, 200)}"${summaryText}\n\nResponde desde el dashboard:\n${dashboardUrl}`
   );
   console.log(`[notifyHostViaOutbox] Notificación encolada → ${hostPhone} (canal: ${label}, cliente: ${clientName})`);
 }

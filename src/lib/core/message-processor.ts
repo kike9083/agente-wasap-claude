@@ -97,7 +97,7 @@ export async function processMessage(
     await resetOfftopicCount(conversationId);
     await onEscalation?.(name, text);
     if (platform !== "whatsapp") {
-      await notifyHostViaOutbox(platform, name, text).catch((err) => {
+      await notifyHostViaOutbox(platform, name, text, conversationId).catch((err) => {
         console.error("[message-processor] Error encolando notificación al host:", err);
       });
     }

@@ -26,7 +26,8 @@ async function notifyHost(
   sock: WASocket,
   clientName: string,
   clientPhone: string,
-  lastMessage: string
+  lastMessage: string,
+  conversationId?: string
 ) {
   const settings = await getActiveSettings();
   const agentPhone = await getNextEscalationAgent();
@@ -42,12 +43,25 @@ async function notifyHost(
     ? `${displayNumber} (abre el dashboard para ver el contacto)`
     : `+${displayNumber}`;
 
+  // Generar resumen de la conversación si hay historial disponible
+  let summaryText = "";
+  if (conversationId) {
+    try {
+      const { getRecentHistory } = await import("../db");
+      const { generateConversationSummary } = await import("../openrouter");
+      const history = await getRecentHistory(conversationId, 10);
+      const summary = await generateConversationSummary(history);
+      if (summary) summaryText = `\n\n📋 Resumen de la conversación:\n${summary}`;
+    } catch { /* si falla el resumen, continúa sin él */ }
+  }
+
   const dashboardUrl = process.env.DASHBOARD_URL || "https://varios-agente-wasap-omni.fjueze.easypanel.host";
   const text =
     `[TechPadah] Atencion requerida\n\n` +
     `Cliente: ${clientName}\n` +
     `Numero: ${phoneLabel}\n` +
-    `Ultimo mensaje: "${lastMessage}"\n\n` +
+    `Ultimo mensaje: "${lastMessage}"` +
+    `${summaryText}\n\n` +
     `Responde desde el dashboard:\n${dashboardUrl}`;
 
   try {
@@ -208,7 +222,7 @@ export default async function handleMessage(
           }
         },
         onEscalation: async (clientName, lastMsg) => {
-          await notifyHost(sock, clientName, phone, lastMsg);
+          await notifyHost(sock, clientName, phone, lastMsg, convo.id);
         },
       });
 

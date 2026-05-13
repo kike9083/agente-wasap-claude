@@ -158,3 +158,32 @@ export async function generateReply(
 
   throw lastError;
 }
+
+export async function generateConversationSummary(
+  history: Array<{ role: "user" | "assistant"; content: string }>
+): Promise<string> {
+  if (history.length === 0) return "";
+  const client = getClient();
+  const transcript = history
+    .map((m) => `${m.role === "user" ? "Cliente" : "Bot"}: ${m.content}`)
+    .join("\n");
+  try {
+    const res = await client.chat.completions.create({
+      model: "ibm-granite/granite-4.1-8b",
+      messages: [
+        {
+          role: "system",
+          content: "Eres un asistente que resume conversaciones de soporte. Responde SOLO con el resumen en español, máximo 3 líneas. Incluye: qué necesita el cliente y cualquier dato relevante que mencionó.",
+        },
+        {
+          role: "user",
+          content: `Resume esta conversación para un agente humano que la va a atender:\n\n${transcript}`,
+        },
+      ],
+      max_tokens: 200,
+    });
+    return res.choices[0]?.message?.content?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
