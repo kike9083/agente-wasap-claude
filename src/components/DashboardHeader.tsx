@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ROLE_PERMISSIONS, type UserRole } from "@/lib/roles";
 
 interface DashboardHeaderProps {
   phone: string | null;
@@ -21,7 +22,7 @@ async function registerPush() {
   await navigator.serviceWorker.ready;
 
   const existing = await reg.pushManager.getSubscription();
-  if (existing) return; // ya suscrito
+  if (existing) return;
 
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
@@ -44,8 +45,9 @@ export function DashboardHeader({
 }: DashboardHeaderProps) {
   const router = useRouter();
   const [userName, setUserName] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<UserRole>("operator");
   const [pushEnabled, setPushEnabled] = useState(false);
+  const permissions = ROLE_PERMISSIONS[userRole];
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -53,12 +55,11 @@ export function DashboardHeader({
       .then((data) => {
         if (data.user) {
           setUserName(data.user.name || data.user.email);
-          setUserRole(data.user.role ?? "Usuario");
+          setUserRole(data.user.role ?? "operator");
         }
       })
       .catch(console.error);
 
-    // Registrar push automáticamente si ya hay permiso concedido
     if (typeof window !== "undefined" && Notification.permission === "granted") {
       registerPush().catch(console.error);
       setPushEnabled(true);
@@ -90,6 +91,7 @@ export function DashboardHeader({
   }
 
   const isConnected = status === "connected";
+  const roleDisplay = { admin: "Administrador", supervisor: "Supervisor", operator: "Operador" }[userRole];
 
   return (
     <header className="border-b border-gray-200 bg-white px-3 py-2 md:px-4 md:py-3 shadow-sm relative z-10">
@@ -112,7 +114,7 @@ export function DashboardHeader({
           {userName && (
             <div className="text-right hidden sm:block mr-2 border-r border-gray-100 pr-4">
               <p className="text-sm font-semibold text-gray-800 leading-tight">{userName}</p>
-              <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{userRole}</p>
+              <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{roleDisplay}</p>
             </div>
           )}
 
@@ -142,66 +144,81 @@ export function DashboardHeader({
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={() => router.push("/stats")}
-              className="p-2 md:px-4 md:py-2 rounded-xl bg-purple-50 text-purple-700 text-xs md:text-sm font-semibold hover:bg-purple-100 ring-1 ring-purple-100 transition-all"
-            >
-              <span className="hidden md:inline">Estadísticas</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.push("/audit-logs")}
-              className="p-2 md:px-4 md:py-2 rounded-xl bg-amber-50 text-amber-700 text-xs md:text-sm font-semibold hover:bg-amber-100 ring-1 ring-amber-100 transition-all"
-            >
-              <span className="hidden md:inline">Auditoría</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.push("/settings")}
-              className="p-2 md:px-4 md:py-2 rounded-xl bg-blue-50 text-blue-700 text-xs md:text-sm font-semibold hover:bg-blue-100 ring-1 ring-blue-100 transition-all"
-            >
-              <span className="hidden md:inline">Ajustes</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-
-            {isConnected ? (
+            {/* Estadísticas */}
+            {permissions.canViewStats && (
               <button
                 type="button"
-                onClick={onDisconnect}
-                disabled={loading}
-                className="p-2 md:px-4 md:py-2 rounded-xl bg-red-50 text-red-600 text-xs md:text-sm font-semibold hover:bg-red-100 ring-1 ring-red-100 transition-all disabled:opacity-50"
+                onClick={() => router.push("/stats")}
+                className="p-2 md:px-4 md:py-2 rounded-xl bg-purple-50 text-purple-700 text-xs md:text-sm font-semibold hover:bg-purple-100 ring-1 ring-purple-100 transition-all"
               >
-                <span className="hidden md:inline">{loading ? "Buscando..." : "Desconectar"}</span>
+                <span className="hidden md:inline">Estadísticas</span>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                </svg>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onConnect}
-                disabled={loading}
-                className="p-2 md:px-4 md:py-2 rounded-xl bg-green-50 text-green-600 text-xs md:text-sm font-semibold hover:bg-green-100 ring-1 ring-green-100 transition-all animate-pulse"
-              >
-                <span className="hidden md:inline">Conectar Bot</span>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </button>
             )}
 
+            {/* Auditoría */}
+            {permissions.canViewAuditLogs && (
+              <button
+                type="button"
+                onClick={() => router.push("/audit-logs")}
+                className="p-2 md:px-4 md:py-2 rounded-xl bg-amber-50 text-amber-700 text-xs md:text-sm font-semibold hover:bg-amber-100 ring-1 ring-amber-100 transition-all"
+              >
+                <span className="hidden md:inline">Auditoría</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </button>
+            )}
+
+            {/* Ajustes */}
+            {permissions.canViewSettings && (
+              <button
+                type="button"
+                onClick={() => router.push("/settings")}
+                className="p-2 md:px-4 md:py-2 rounded-xl bg-blue-50 text-blue-700 text-xs md:text-sm font-semibold hover:bg-blue-100 ring-1 ring-blue-100 transition-all"
+              >
+                <span className="hidden md:inline">Ajustes</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+            )}
+
+            {/* Conectar/Desconectar Bot */}
+            {permissions.canDisconnectBot ? (
+              isConnected ? (
+                <button
+                  type="button"
+                  onClick={onDisconnect}
+                  disabled={loading}
+                  className="p-2 md:px-4 md:py-2 rounded-xl bg-red-50 text-red-600 text-xs md:text-sm font-semibold hover:bg-red-100 ring-1 ring-red-100 transition-all disabled:opacity-50"
+                >
+                  <span className="hidden md:inline">{loading ? "Buscando..." : "Desconectar"}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                </button>
+              ) : null
+            ) : permissions.canConnectBot ? (
+              !isConnected && (
+                <button
+                  type="button"
+                  onClick={onConnect}
+                  disabled={loading}
+                  className="p-2 md:px-4 md:py-2 rounded-xl bg-green-50 text-green-600 text-xs md:text-sm font-semibold hover:bg-green-100 ring-1 ring-green-100 transition-all animate-pulse"
+                >
+                  <span className="hidden md:inline">Conectar Bot</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </button>
+              )
+            ) : null}
+
+            {/* Salir */}
             <button
               type="button"
               onClick={handleLogout}

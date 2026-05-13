@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { Client, Users } from "node-appwrite";
+import { getUserRole } from "@/lib/roles";
 
 export async function GET() {
   try {
@@ -19,10 +20,7 @@ export async function GET() {
     const users = new Users(client);
     const user = await users.get(userId);
 
-    // Determinar rol por posición en DASHBOARD_USERS (el primero es admin)
-    const entries = (process.env.DASHBOARD_USERS ?? "").split(",");
-    const firstEmail = entries[0]?.split(":")[0]?.trim();
-    const role = user.email === firstEmail ? "Administrador" : "Usuario";
+    const role = getUserRole(user.labels ?? []);
 
     return NextResponse.json({ user: { ...user, role } });
   } catch (err) {
