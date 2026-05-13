@@ -42,12 +42,13 @@ async function notifyHost(
     ? `${displayNumber} (abre el dashboard para ver el contacto)`
     : `+${displayNumber}`;
 
+  const dashboardUrl = process.env.DASHBOARD_URL || "https://varios-agente-wasap-omni.fjueze.easypanel.host";
   const text =
     `[TechPadah] Atencion requerida\n\n` +
     `Cliente: ${clientName}\n` +
     `Numero: ${phoneLabel}\n` +
     `Ultimo mensaje: "${lastMessage}"\n\n` +
-    `El bot no pudo resolver la consulta. Revisa el dashboard para responder.`;
+    `Responde desde el dashboard:\n${dashboardUrl}`;
 
   try {
     await sock.sendMessage(`${hostPhone}@s.whatsapp.net`, { text });

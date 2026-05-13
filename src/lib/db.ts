@@ -414,11 +414,12 @@ export async function notifyHostViaOutbox(
   }
   const labels: Record<string, string> = { telegram: "Telegram", webchat: "WebChat", instagram: "Instagram", facebook: "Facebook" };
   const label = labels[platform] ?? platform;
+  const dashboardUrl = process.env.DASHBOARD_URL || "https://varios-agente-wasap-omni.fjueze.easypanel.host";
   const { conversation } = await getOrCreateConversation("whatsapp", hostPhone, "Sistema", hostPhone);
   await enqueueOutbox(
     conversation.id,
     hostPhone,
-    `[TechPadah] Atencion requerida\n\nCanal: ${label}\nCliente: ${clientName}\nUltimo mensaje: "${lastMsg.slice(0, 200)}"\n\nRevisa el dashboard para responder.`
+    `[TechPadah] Atencion requerida\n\nCanal: ${label}\nCliente: ${clientName}\nUltimo mensaje: "${lastMsg.slice(0, 200)}"\n\nResponde desde el dashboard:\n${dashboardUrl}`
   );
   console.log(`[notifyHostViaOutbox] Notificación encolada → ${hostPhone} (canal: ${label}, cliente: ${clientName})`);
 }
