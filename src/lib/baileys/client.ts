@@ -129,11 +129,11 @@ async function createSocket(
         undefinedCodeStreak++;
         console.log(`[bot] Código desconocido (racha ${undefinedCodeStreak})`);
         if (undefinedCodeStreak >= 3) {
-          console.log("[bot] Marcando auth para limpiar por fallos repetidos sin código...");
+          console.log("[bot] Marcando auth para limpiar por fallos repetidos sin código. Esperando 5 min para evitar bloqueo de IP...");
           undefinedCodeStreak = 0;
           pendingAuthClear = true;
           await setConnectionState({ status: "disconnected", qr_string: null, phone: null });
-          scheduleReconnect(2000, onReconnect);
+          scheduleReconnect(300000, onReconnect); // 5 min — mismo que 401, evita bloqueo de IP
           return;
         }
       } else {
