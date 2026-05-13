@@ -634,3 +634,44 @@ Servidor Appwrite migrado de `varios-appwrite.fjueze.easypanel.host` a `varios-a
 - WhatsApp conectado y respondiendo ✅
 - Telegram token válido (`@shavuot_bot`) ✅, env vars correctos en EasyPanel ✅
 - Telegram pendiente de confirmación de funcionamiento (usuario debe probar)
+
+### 2026-05-12 — Continuación: token Telegram, webchat widget, y system prompt TechPadah
+
+**1. Token Telegram actualizado (bot `@eji_09_16_23_2026_bot`)**
+- Token anterior (`@shavuot_bot`) era incorrecto
+- Token correcto: `8305653649:AAG_X0wfuY6SWTpqj1M_Z_cz1FNBBpagv2g`
+- Actualizado en `.env.local` y en EasyPanel env vars, redeploy realizado
+- Diagnósticos añadidos a `scripts/start-telegram.ts`: logs de token/enabled al arranque y por mensaje
+- Tras el cambio, Telegram comenzó a funcionar ✅ (usuario confirmó)
+
+**2. Fix chat-widget.js → HTTP 307 en producción**
+- El widget de webchat de `techpadah.html` devolvía 307 (redirect a /login)
+- Causa: `/chat-widget.js` y `/sw.js` no estaban en `PUBLIC_PATHS` del middleware
+- Fix: añadidos a la lista en `src/middleware.ts` (commit `7543279`)
+
+**3. System prompt TechPadah detallado (guardado en Appwrite)**
+- Cliente: TechPadah — empresa tecnológica panameña (chatbots, redes, desarrollo web, cableado)
+- Script `scripts/save_system_prompt.py` creado para guardar vía API REST (evitar problemas de escape en bash)
+- Bot identity: "TechBot" — máximo 4 líneas por respuesta, sin rellenos genéricos
+- **Restricción absoluta de tema**: si pregunta fuera del ámbito de TechPadah, responde EXACTAMENTE: "Solo puedo ayudarle con información sobre los servicios de TechPadah. ¿Le interesa conocer alguno de nuestros servicios?"
+- Catálogo con precios ficticios en USD para 4 áreas:
+  - Chatbots IA: $299–$899/mes + $150 setup
+  - Redes: $75–$800 + $120/mes mantenimiento
+  - Desarrollo web: $450–$2,200 + $79/mes hosting
+  - Cableado estructurado: $20–$45/punto, rack desde $350
+- 12 condiciones de escalación a asesor
+- Frase exacta de escalación: "Déjame conectarte con uno de nuestros asesores para darte una propuesta personalizada."
+- 7 prohibiciones absolutas (NUNCA)
+- Guardado en Appwrite `bot_settings` singleton con:
+  - `offtopic_limit: 2`
+  - `offtopic_phrases: ["solo puedo ayudarle con informacion sobre los servicios de techpadah", ...]` (JSON array)
+  - `escalation_phrases: ["conectarte con uno de nuestros asesores", "déjame conectarte con uno de nuestros asesores", ...]` (JSON array)
+
+**Gotcha importante — Appwrite PATCH v1.8:**
+- La API REST de Appwrite 1.8 para PATCH de documentos requiere el body envuelto en `{"data": {...}}`, no los campos directamente en el body.
+
+**Estado al cierre:**
+- System prompt TechPadah activo en producción ✅
+- Telegram `@eji_09_16_23_2026_bot` funcionando ✅
+- webchat accesible sin auth (middleware PUBLIC_PATHS correcto) ✅
+- TypeScript: 0 errores ✅

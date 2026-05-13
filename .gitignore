@@ -33,3 +33,6 @@ yarn-error.log*
 
 # Testing
 .coverage/
+
+# Scripts temporales con credenciales
+scripts/save_system_prompt.py
