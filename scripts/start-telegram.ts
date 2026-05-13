@@ -7,6 +7,9 @@ import { processMessage } from "../src/lib/core/message-processor";
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const telegramEnabled = isChannelEnabled("telegram");
 
+console.log(`[telegram] ENABLED_CHANNELS=${process.env.ENABLED_CHANNELS ?? "(no definido)"}`);
+console.log(`[telegram] token=${token ? "definido" : "NO definido"}, enabled=${telegramEnabled}`);
+
 if (!token || !telegramEnabled) {
   const reason = !telegramEnabled
     ? "Telegram no incluido en ENABLED_CHANNELS (plan básico)"
@@ -23,12 +26,16 @@ if (!token || !telegramEnabled) {
     const name = ctx.from.first_name || ctx.from.username || "Usuario";
     const text = ctx.message.text;
 
+    console.log(`[telegram] ← ${chatId} (${name}): "${text}"`);
+
     try {
       const { conversation: convo, isNew } = await getOrCreateConversation(
         "telegram",
         chatId,
         name
       );
+
+      console.log(`[telegram] Conversación: ${convo.id} (nueva=${isNew})`);
 
       await processMessage({
         platform: "telegram",
@@ -37,6 +44,7 @@ if (!token || !telegramEnabled) {
         name,
         text,
         sendReply: async (reply) => {
+          console.log(`[telegram] → ${chatId}: "${reply.slice(0, 60)}..."`);
           await ctx.reply(reply);
         },
         onEscalation: async (clientName, lastMsg) => {
@@ -85,6 +93,7 @@ if (!token || !telegramEnabled) {
       });
   }
 
+  console.log("[telegram] Iniciando long polling...");
   launchWithRetry();
 
   process.once("SIGINT", () => bot.stop("SIGINT"));
