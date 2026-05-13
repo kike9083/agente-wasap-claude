@@ -1,13 +1,9 @@
-# CLAUDE.md — Instrucciones para Claude Code
+# GEMINI.md — Instrucciones para Gemini CLI (Antigravity)
 
 ## PASO 1 OBLIGATORIO — Lee esto antes de hacer cualquier cosa
 
 **Lee el archivo PROJECT_BRAIN.md en la raíz de este proyecto.**
 Contiene la arquitectura completa, bugs conocidos, decisiones tomadas y el historial de sesiones.
-
-```
-f:\Documents\aplicaciones web\agente-wasap-claude\PROJECT_BRAIN.md
-```
 
 No respondas ni toques código hasta haberlo leído.
 
@@ -31,7 +27,18 @@ El usuario **NO debe pedirte** que guardes los cambios. Hazlo siempre tú:
 - **Arrancar**: `npm run dev:all` (bot + telegram + dashboard en paralelo)
 - **BD**: Appwrite self-hosted en EasyPanel (`varios-appwrite-techpadah.fjueze.easypanel.host`)
 - **Producción**: `https://varios-agente-wasap-omni.fjueze.easypanel.host/` (servicio `agente-wasap-omni`, rama `feature/omnichannel`)
+- **Cliente activo**: TechPadah — bot se llama TechBot, system prompt guardado en Appwrite `bot_settings`
 - **Demo WebChat**: `/techpadah.html` (landing con widget flotante)
+
+---
+
+## Reglas de respuesta
+
+- Responde **siempre en español** — el usuario es hispanohablante
+- Respuestas concisas y directas
+- Al referenciar código, usa rutas relativas al workspace
+
+---
 
 ## Gotchas conocidos (no repitas estos errores)
 
@@ -53,5 +60,84 @@ El usuario **NO debe pedirte** que guardes los cambios. Hazlo siempre tú:
 | 14 | Nombre del volumen Docker en EasyPanel | NO es `whatsapp-auth` — es `varios_agente-wasap-omni_whatsapp-auth`. Usar `docker volume ls \| grep wasap` |
 | 15 | Appwrite 1.8 PATCH requiere wrapper `{"data":{}}` | Al hacer PATCH de un documento vía REST, envolver el body en `{"data": {...}}` — los campos directos son ignorados silenciosamente |
 | 16 | `offtopic_phrases` y `escalation_phrases` deben ser JSON array como string | El código hace `JSON.parse()` sobre estos campos. Guardar como `'["frase1","frase2"]'`, NO como texto plano |
-| 17 | Notas de voz en Telegram requieren `GROQ_API_KEY` | El handler `bot.on("voice")` descarga el OGG y transcribe con Whisper. Sin la key, responde con mensaje de error al usuario |
-| 18 | Modelos LLM con function calling no soportan `tools` en todos los providers | Si un modelo falla con 400 en la segunda llamada (tool result), puede ser que no soporte tool calling. Cambiar modelo en `bot_settings.llm_model` o quitar la tool del sistema |
+| 17 | Notas de voz en Telegram requieren `GROQ_API_KEY` | El handler `bot.on("voice")` descarga el OGG y transcribe con Whisper. Sin la key, responde con mensaje de error |
+| 18 | Modelos LLM con function calling no soportan `tools` en todos los providers | Si un modelo falla con 400 en la segunda llamada (tool result), puede no soportar tool calling. Cambiar modelo o quitar la tool |
+
+---
+
+## Arquitectura de canales
+
+```
+WhatsApp  → scripts/start-bot.ts      (Baileys)
+Telegram  → scripts/start-telegram.ts (Telegraf) ← texto + voz (Whisper)
+WebChat   → src/app/api/chat/route.ts  (HTTP POST)
+                    ↓ todos
+          src/lib/core/message-processor.ts
+                    ↓
+          src/lib/openrouter.ts  (LLM + fallback chain)
+                    ↓
+          Appwrite (base de datos)
+```
+
+## Fallback chain de modelos LLM
+
+Definido en `src/lib/openrouter.ts` como `FALLBACK_CHAIN`:
+1. `ibm-granite/granite-4.1-8b` — $0.05/M (principal)
+2. `qwen/qwen3.5-9b` — $0.04/M
+3. `google/gemma-4-26b-a4b-it` — $0.06/M
+4. `rekaai/reka-edge` — $0.10/M
+5. `google/gemma-4-31b-it` — $0.12/M
+6. `openai/gpt-4o-mini` — $0.15/M (fallback final)
+
+Si el modelo activo falla con 429 o 5xx → intenta el siguiente automáticamente.
+
+## Colecciones Appwrite
+
+| Colección | Propósito |
+|---|---|
+| `conversations` | Un doc por contacto (platform+externalId, mode AI/HUMAN/BANNED, offtopicCount) |
+| `messages` | Historial de chat |
+| `connection_state` | Singleton del socket Baileys (ID: `singleton`) |
+| `outbox` | Cola FIFO dashboard → bot |
+| `restart_flag` | IPC para reiniciar el bot desde dashboard (ID: `singleton`) |
+| `bot_settings` | Singleton: system_prompt, llm_model, escalation_phrases, offtopic_limit, etc. (ID: `singleton`) |
+| `channel_settings` | Config por canal; campo vacío hereda de bot_settings (doc ID = nombre de plataforma) |
+| `products` | Catálogo de productos para function calling |
+
+## MCP de Appwrite
+
+Config en `C:\Users\soporte\.gemini\antigravity\mcp_config.json`:
+
+```json
+"appwrite": {
+  "command": "python",
+  "args": ["-m", "mcp_server_appwrite"],
+  "env": {
+    "APPWRITE_PROJECT_ID": "6a03855900044a4c6680",
+    "APPWRITE_ENDPOINT": "https://varios-appwrite-techpadah.fjueze.easypanel.host/v1"
+  }
+}
+```
+
+> ⚠️ Verificar con `python -m mcp_server_appwrite` si el MCP no responde.
+
+## Variables de entorno clave
+
+```
+OPENROUTER_API_KEY, OPENROUTER_MODEL=ibm-granite/granite-4.1-8b
+APPWRITE_ENDPOINT=https://varios-appwrite-techpadah.fjueze.easypanel.host/v1
+APPWRITE_PROJECT_ID=6a03855900044a4c6680
+APPWRITE_DATABASE_ID=6a03887a002f400d872c
+GROQ_API_KEY                    ← transcripción de voz
+TELEGRAM_BOT_TOKEN              ← bot @eji_09_16_23_2026_bot
+ENABLED_CHANNELS=whatsapp,webchat,telegram
+```
+
+## Comandos útiles
+
+```bash
+npm run dev:all          # Bot + Telegram + dashboard
+npx tsc --noEmit         # Verificar TypeScript
+npx tsx scripts/setup-appwrite.ts   # Setup BD (solo primera vez)
+python scripts/save_system_prompt.py  # Actualizar system prompt en Appwrite
+```
