@@ -91,3 +91,11 @@ El usuario **NO debe pedirte** que guardes los cambios. Hazlo siempre tú:
 - **Comportamiento**: 1ª escalación → Agente 1, 2ª → Agente 2, 3ª → Agente 3, 4ª → Agente 1 (reinicia)
 - **Fallback**: Si no hay agentes configurados, usa `host_phone` como antes
 - **Función clave**: `getNextEscalationAgent()` en `src/lib/db.ts`
+- **Gotcha**: `notifyHostViaOutbox()` (Telegram/WebChat) y `notifyHost()` (WhatsApp) son funciones DISTINTAS — ambas deben tener round-robin
+
+### Notificaciones de escalación enriquecidas
+- **Enlace al dashboard**: Configurable via `DASHBOARD_URL` en .env — incluido en todo mensaje de escalación
+- **Resumen IA**: `generateConversationSummary()` en `src/lib/openrouter.ts` genera un resumen de máx. 3 líneas del historial usando IBM Granite 4.1 8B
+- **Contexto completo**: El agente recibe qué necesita el cliente antes de entrar al dashboard
+- **Silencioso**: Si el LLM falla al resumir, el mensaje se envía igual sin resumen
+- **GROQ_API_KEY opcional**: El bot arranca sin ella; los audios se ignoran en lugar de crashear

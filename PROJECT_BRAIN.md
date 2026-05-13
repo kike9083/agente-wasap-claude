@@ -986,3 +986,54 @@ Escalación #6: → 50761317222 (index 1)
 - ✅ Índice rotando correctamente entre agentes
 - ✅ Sistema persistiendo estado en Appwrite
 - ✅ TypeScript: 0 errores
+
+### 2026-05-13 — Mejoras a notificaciones de escalación
+
+**Features agregados en esta sesión:**
+
+#### 1. Enlace al dashboard en notificaciones
+Ambas funciones de notificación (`notifyHost()` en handler.ts y `notifyHostViaOutbox()` en db.ts) ahora incluyen el enlace directo al dashboard al final del mensaje:
+```
+Responde desde el dashboard:
+https://varios-agente-wasap-omni.fjueze.easypanel.host
+```
+Configurable vía variable de entorno `DASHBOARD_URL` en EasyPanel.
+
+#### 2. Resumen ejecutivo IA de la conversación
+Nueva función `generateConversationSummary()` en `src/lib/openrouter.ts`:
+- Lee los últimos 10 mensajes del historial de la conversación
+- Llama al LLM (IBM Granite 4.1 8B) con un prompt específico para resumir
+- Genera máximo 3 líneas con: qué necesita el cliente y datos relevantes mencionados
+- Si el LLM falla, el mensaje se envía igual sin el resumen (silencioso)
+
+El resumen se incluye en el mensaje de notificación:
+```
+[TechPadah] Atencion requerida
+
+Canal: Telegram
+Cliente: Enrique
+Ultimo mensaje: "quiero hablar con un humano"
+
+📋 Resumen de la conversación:
+El cliente preguntó sobre precios de servicios de redes para empresa
+de 20 personas. Mencionó que busca cotización formal. Solicita hablar
+con un asesor para presupuesto personalizado.
+
+Responde desde el dashboard:
+https://varios-agente-wasap-omni.fjueze.easypanel.host
+```
+
+#### 3. GROQ_API_KEY ahora es opcional
+El bot puede arrancar sin `GROQ_API_KEY`. Si no está configurada, los audios se ignoran con un log de aviso en lugar de crashear el proceso.
+
+**Archivos modificados:**
+- `src/lib/openrouter.ts` — nueva función `generateConversationSummary()`
+- `src/lib/db.ts` — `notifyHostViaOutbox()` recibe `conversationId`, genera resumen y agrega enlace
+- `src/lib/baileys/handler.ts` — `notifyHost()` recibe `conversationId`, genera resumen y agrega enlace; `GROQ_API_KEY` opcional
+- `src/lib/core/message-processor.ts` — pasa `conversationId` a `notifyHostViaOutbox()`
+
+**Verificaciones completadas:**
+- ✅ `npx tsc --noEmit` → 0 errores TypeScript
+- ✅ Commit y push a `feature/omnichannel` — deploy en EasyPanel
+- ✅ Round-robin confirmado funcionando en producción (logs verificados)
+- ✅ Bot arranca correctamente sin GROQ_API_KEY

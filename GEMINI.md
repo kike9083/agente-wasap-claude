@@ -152,6 +152,34 @@ ENABLED_CHANNELS=whatsapp,webchat,telegram
 - **Fuente**: Labels de usuarios Appwrite (`admin`, `supervisor`, `operator`)
 - **Dónde**: `src/lib/roles.ts` define la matriz de permisos `ROLE_PERMISSIONS`
 
+### Sistema de Escalación Round-Robin (Mayo 2026)
+- **Funcionalidad**: Escalaciones rotan entre múltiples agentes (hasta 5) en turno rotativo
+- **Configuración**: Settings → Global (solo admin) → "Agentes de Escalación"
+- **Almacenamiento en `bot_settings`**: `escalation_agents` (JSON array) + `escalation_agent_index` (Integer)
+- **Fallback**: Si no hay agentes → usa `host_phone` como antes
+- **⚠️ Gotcha**: `notifyHost()` (WhatsApp) y `notifyHostViaOutbox()` (Telegram/WebChat) son funciones distintas — ambas deben tener round-robin
+- **Migración**: `npx tsx scripts/migrate-escalation-agents.ts`
+
+### Notificaciones de Escalación Enriquecidas (Mayo 2026)
+Los agentes reciben mensajes con contexto completo:
+```
+[TechPadah] Atencion requerida
+
+Canal: WhatsApp
+Cliente: Kike / Numero: +50761142198
+Ultimo mensaje: "quiero hablar con un humano"
+
+📋 Resumen de la conversación:
+El cliente consultó sobre servicios de redes para empresa de 20 personas.
+Solicita cotización formal. Quiere hablar con un asesor.
+
+Responde desde el dashboard:
+https://varios-agente-wasap-omni.fjueze.easypanel.host
+```
+- **Resumen IA**: `generateConversationSummary()` en `src/lib/openrouter.ts` — usa IBM Granite, max 3 líneas
+- **Enlace**: Configurable con variable de entorno `DASHBOARD_URL`
+- **GROQ_API_KEY es opcional**: El bot arranca sin ella; audios se ignoran en lugar de crashear
+
 ### Archivos Nuevos
 | Archivo | Propósito |
 |---|---|
@@ -159,6 +187,10 @@ ENABLED_CHANNELS=whatsapp,webchat,telegram
 | `src/lib/route-permissions.ts` | Mapeo de rutas permitidas por rol |
 | `scripts/assign-roles.ts` | Asignar roles a usuarios (edita y ejecuta) |
 | `scripts/migrate-audit-logs.ts` | Crear colección audit_logs en Appwrite |
+| `scripts/migrate-escalation-agents.ts` | Crear atributos escalation en bot_settings |
+| `scripts/check-escalation-agents.ts` | Verificar agentes en Appwrite |
+| `scripts/test-escalation-roundrobin.ts` | Simular 6 escalaciones sin WhatsApp conectado |
+| `scripts/debug-escalation-flow.ts` | Debug completo del flujo de escalación |
 | `docs/ROLES.md` | Documentación completa del sistema de roles |
 
 ## Comandos útiles (Actualizado)
@@ -168,6 +200,9 @@ npm run dev:all          # Bot + Telegram + dashboard
 npx tsc --noEmit         # Verificar TypeScript
 npx tsx scripts/setup-appwrite.ts   # Setup BD (solo primera vez)
 npx tsx scripts/migrate-audit-logs.ts  # Crear colección audit_logs
+npx tsx scripts/migrate-escalation-agents.ts  # Agregar campos de escalación a bot_settings
+npx tsx scripts/check-escalation-agents.ts    # Verificar agentes configurados en Appwrite
+npx tsx scripts/test-escalation-roundrobin.ts # Probar round-robin sin WhatsApp conectado
 npx tsx scripts/assign-roles.ts   # Asignar roles (edita script primero)
 python scripts/save_system_prompt.py  # Actualizar system prompt en Appwrite
 ```
