@@ -1,7 +1,7 @@
 
 async function testAppwriteLogin() {
-  const endpoint = 'https://varios-appwrite.fjueze.easypanel.host/v1';
-  const projectId = '69f7a4cc001de1e8b9b7';
+  const endpoint = 'https://varios-appwrite-techpadah.fjueze.easypanel.host/v1';
+  const projectId = '6a03855900044a4c6680';
   const email = 'admin@jaigerhouse.com';
   const password = 'Admin1234!';
 

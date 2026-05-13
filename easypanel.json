@@ -1,8 +1,8 @@
 {
   "name": "agente-wasap",
-  "description": "WhatsApp Bot con Dashboard - Jaiger House Collection",
+  "description": "WhatsApp Bot con Dashboard - TechPadah",
   "repository": "https://github.com/kike9083/agente-wasap-claude",
-  "branch": "master",
+  "branch": "feature/omnichannel",
   "buildCommand": "npm install && npm run build",
   "startCommand": "npm start",
   "ports": [
@@ -21,17 +21,18 @@
     "NODE_ENV": "production",
     "OPENROUTER_API_KEY": "",
     "OPENROUTER_MODEL": "openai/gpt-4o-mini",
-    "HOST_PHONE": "",
-    "APPWRITE_ENDPOINT": "https://varios-appwrite.fjueze.easypanel.host/v1",
-    "APPWRITE_PROJECT_ID": "69f7a4cc001de1e8b9b7",
+    "HOST_PHONE": "50761142198",
+    "APPWRITE_ENDPOINT": "https://varios-appwrite-techpadah.fjueze.easypanel.host/v1",
+    "APPWRITE_PROJECT_ID": "6a03855900044a4c6680",
     "APPWRITE_API_KEY": "",
-    "APPWRITE_DATABASE_ID": "69f7a6100019fdcff9c9",
+    "APPWRITE_DATABASE_ID": "6a03887a002f400d872c",
     "GROQ_API_KEY": "",
-    "HUMAN_TIMEOUT_HOURS": "4",
-    "DASHBOARD_USERS": "admin@jaigerhouse.com",
+    "HUMAN_TIMEOUT_HOURS": "1",
     "NEXT_PUBLIC_VAPID_PUBLIC_KEY": "",
     "VAPID_PRIVATE_KEY": "",
-    "VAPID_EMAIL": ""
+    "VAPID_EMAIL": "mailto:admin@jaigerhouse.com",
+    "TELEGRAM_BOT_TOKEN": "",
+    "ENABLED_CHANNELS": "whatsapp,webchat,telegram"
   },
   "healthCheck": {
     "path": "/",
