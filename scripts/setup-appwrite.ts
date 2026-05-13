@@ -72,14 +72,18 @@ async function main() {
 
   // ── conversations ──────────────────────────────────────────
   await createCollection("conversations", "Conversations");
-  await createAttr(() => db.createStringAttribute(DATABASE_ID, "conversations", "phone", 100, true), "phone");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "conversations", "phone", 100, false), "phone");
   await createAttr(() => db.createStringAttribute(DATABASE_ID, "conversations", "name", 100, false), "name");
   await createAttr(() => db.createStringAttribute(DATABASE_ID, "conversations", "mode", 10, false, "AI"), "mode");
   await createAttr(() => db.createIntegerAttribute(DATABASE_ID, "conversations", "lastMessageAt", false), "lastMessageAt");
   await createAttr(() => db.createStringAttribute(DATABASE_ID, "conversations", "lastMessagePreview", 300, false), "lastMessagePreview");
   await createAttr(() => db.createIntegerAttribute(DATABASE_ID, "conversations", "createdAt", true), "createdAt");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "conversations", "platform", 30, false, "whatsapp"), "platform");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "conversations", "externalId", 100, false), "externalId");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "conversations", "tags", 1000, false, "[]"), "tags");
+  await createAttr(() => db.createIntegerAttribute(DATABASE_ID, "conversations", "offtopicCount", false, 0), "offtopicCount");
   await sleep(1500);
-  await createIndex("conversations", "phone_unique", "unique", ["phone"]);
+  await createIndex("conversations", "platform_externalId_idx", "key", ["platform", "externalId"]);
   await createIndex("conversations", "lastMessageAt_desc", "key", ["lastMessageAt"]);
 
   // ── messages ───────────────────────────────────────────────
@@ -109,6 +113,30 @@ async function main() {
   await sleep(1500);
   await createIndex("outbox", "status_idx", "key", ["status"]);
   await createIndex("outbox", "status_created_idx", "key", ["status", "createdAt"]);
+
+  // ── bot_settings ───────────────────────────────────────────
+  await createCollection("bot_settings", "Bot Settings");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "bot_settings", "systemPrompt", 20000, false), "systemPrompt");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "bot_settings", "welcomeMessage", 500, false), "welcomeMessage");
+  await createAttr(() => db.createIntegerAttribute(DATABASE_ID, "bot_settings", "humanTimeoutHours", false), "humanTimeoutHours");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "bot_settings", "llmModel", 100, false), "llmModel");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "bot_settings", "hostPhone", 50, false), "hostPhone");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "bot_settings", "escalationPhrases", 2000, false), "escalationPhrases");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "bot_settings", "offtopicPhrases", 2000, false), "offtopicPhrases");
+  await createAttr(() => db.createIntegerAttribute(DATABASE_ID, "bot_settings", "offtopicLimit", false), "offtopicLimit");
+
+  // ── channel_settings ───────────────────────────────────────
+  await createCollection("channel_settings", "Channel Settings");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "channel_settings", "platform", 30, true), "platform");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "channel_settings", "systemPrompt", 20000, false), "systemPrompt");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "channel_settings", "welcomeMessage", 500, false), "welcomeMessage");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "channel_settings", "llmModel", 100, false), "llmModel");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "channel_settings", "hostPhone", 50, false), "hostPhone");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "channel_settings", "escalationPhrases", 2000, false), "escalationPhrases");
+  await createAttr(() => db.createStringAttribute(DATABASE_ID, "channel_settings", "offtopicPhrases", 2000, false), "offtopicPhrases");
+  await createAttr(() => db.createIntegerAttribute(DATABASE_ID, "channel_settings", "offtopicLimit", false), "offtopicLimit");
+  await sleep(1500);
+  await createIndex("channel_settings", "platform_unique", "unique", ["platform"]);
 
   // ── restart_flag ───────────────────────────────────────────
   await createCollection("restart_flag", "Restart Flag");

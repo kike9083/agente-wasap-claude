@@ -34,6 +34,5 @@ yarn-error.log*
 # Testing
 .coverage/
 
-# Deployment configs (contain secrets)
-service.json
-easypanel.json
+# Scripts temporales con credenciales
+scripts/save_system_prompt.py

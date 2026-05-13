@@ -21,7 +21,8 @@ Agente conversacional de WhatsApp que conecta un número real con un LLM vía Op
 - **Dashboard Next.js:** Ver conversaciones, alternar modo IA ↔ Humano, responder manualmente
 - **Appwrite como base de datos:** Reemplazó SQLite en mayo 2026. Almacena conversaciones, mensajes, estado de conexión, cola de mensajes salientes
 
-**Cliente:** TechPadah (soluciones tecnológicas integrales — IA, redes, desarrollo web, cableado, Pedregal / Rana de Oro, Panamá)
+**Cliente activo:** TechPadah (soluciones tecnológicas integrales — IA, redes, desarrollo web, cableado, Panamá)
+**Bot:** TechBot — system prompt con catálogo de precios ficticios, restricción estricta de tema, 12 condiciones de escalación. Guardado en Appwrite `bot_settings` singleton.
 
 ---
 
@@ -34,7 +35,9 @@ Agente conversacional de WhatsApp que conecta un número real con un LLM vía Op
 | Bot WhatsApp | Baileys | 6.7+ |
 | Base de datos | Appwrite (EasyPanel) | 1.8.0 |
 | SDK Appwrite | node-appwrite | 14.x (compatible con Appwrite 1.8) |
-| LLM | OpenRouter (OpenAI SDK) | gpt-4o-mini |
+| LLM | OpenRouter (OpenAI SDK) + fallback chain | ibm-granite/granite-4.1-8b → gpt-4o-mini |
+| Transcripción voz | Groq Whisper (whisper-large-v3) | WhatsApp + Telegram |
+| Bot Telegram | Telegraf | 4.x |
 | Runtime | Node.js | ≥ 20.9.0 |
 
 ---
@@ -52,7 +55,7 @@ Agente conversacional de WhatsApp que conecta un número real con un LLM vía Op
 └────────┬────────────┘        └──────────┬─────────────┘
          │                                │
          └──────── Appwrite HTTP API ──────┘
-              https://varios-appwrite.fjueze.easypanel.host
+              https://varios-appwrite-techpadah.fjueze.easypanel.host
 ```
 
 **Dos procesos distintos se comunican via Appwrite** (antes era SQLite WAL local).
@@ -70,10 +73,11 @@ Agente conversacional de WhatsApp que conecta un número real con un LLM vía Op
 | `channel_settings` | Config por canal: mismo schema que bot_settings menos human_timeout_hours. Doc ID = nombre de plataforma ("whatsapp", "telegram", "webchat"). Campo vacío → hereda de bot_settings | plataforma |
 
 ### Credenciales Appwrite (en .env.local)
-- **Endpoint:** `https://varios-appwrite.fjueze.easypanel.host/v1`
-- **Project ID:** `69f7a4cc001de1e8b9b7`
-- **Database ID:** `69f7a6100019fdcff9c9` (nombre: agente-wasap-basico)
+- **Endpoint:** `https://varios-appwrite-techpadah.fjueze.easypanel.host/v1`
+- **Project ID:** `6a03855900044a4c6680`
+- **Database ID:** `6a03887a002f400d872c`
 - **API Key:** en `.env.local` como `APPWRITE_API_KEY`
+- **Servidor migrado:** 2026-05-12 (antiguo: `varios-appwrite.fjueze.easypanel.host` — obsoleto)
 
 ---
 
@@ -85,7 +89,8 @@ Agente conversacional de WhatsApp que conecta un número real con un LLM vía Op
 | `src/lib/db.ts` | Toda la capa de datos (Appwrite). Todas las funciones son async | ⚠️ Cambio crítico vs SQLite |
 | `src/lib/baileys/client.ts` | Socket WhatsApp, mapa LID→JID, reconexión | ⚠️ resolveJid(), lidToJid Map |
 | `src/lib/baileys/handler.ts` | Procesa mensajes, llama LLM, escala | ⚠️ Todas las llamadas db son await |
-| `src/lib/openrouter.ts` | Llamadas LLM + stripChainOfThought | ⚠️ Manejo de errores choices[] |
+| `src/lib/openrouter.ts` | Llamadas LLM + fallback chain (6 modelos) + stripChainOfThought | ⚠️ `FALLBACK_CHAIN` define el orden de modelos |
+| `scripts/start-telegram.ts` | Bot Telegram: texto + notas de voz (Groq Whisper) + outbox poller | ⚠️ `GROQ_API_KEY` requerida para voice |
 | `src/lib/system-prompt.ts` | Instrucciones del bot (fallback). Prompt real en Appwrite `bot_settings` | Cambiar por cliente |
 | `scripts/start-bot.ts` | Proceso principal del bot, pollers async | ⚠️ Outbox y restart son async |
 | `scripts/env-loader.ts` | Carga .env.local (ES module fix) | Debe ser PRIMER import de start-bot |
@@ -114,6 +119,9 @@ Llama `resolveJid()` antes de `sendMessage()`. Si se omite, mensajes a contactos
 ### `stripChainOfThought()` — `src/lib/openrouter.ts`
 Elimina razonamiento interno de modelos como DeepSeek. Sin esto el bot respondería con texto en inglés.
 
+### `FALLBACK_CHAIN` + `buildModelQueue()` — `src/lib/openrouter.ts`
+Cadena de 6 modelos ordenados de más barato ($0.05/M) a más caro ($0.15/M). Si el modelo activo falla con 429 o 5xx, `generateReply` intenta el siguiente automáticamente. Errores 4xx no-retriables (400, 401, 403) detienen la cadena. Log de aviso cuando se activa el fallback.
+
 ---
 
 ## Decisiones importantes ya tomadas
@@ -137,13 +145,21 @@ Elimina razonamiento interno de modelos como DeepSeek. Sin esto el bot responder
 
 ```
 OPENROUTER_API_KEY=sk-or-v1-...
-OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_MODEL=ibm-granite/granite-4.1-8b   # modelo base; fallback chain en openrouter.ts
 HOST_PHONE=50761142198
 
-APPWRITE_ENDPOINT=https://varios-appwrite.fjueze.easypanel.host/v1
-APPWRITE_PROJECT_ID=69f7a4cc001de1e8b9b7
+APPWRITE_ENDPOINT=https://varios-appwrite-techpadah.fjueze.easypanel.host/v1
+APPWRITE_PROJECT_ID=6a03855900044a4c6680
 APPWRITE_API_KEY=standard_...
-APPWRITE_DATABASE_ID=69f7a6100019fdcff9c9
+APPWRITE_DATABASE_ID=6a03887a002f400d872c
+
+GROQ_API_KEY=gsk_...                           # transcripción de voz (WhatsApp + Telegram)
+TELEGRAM_BOT_TOKEN=8305653649:AAG_...          # bot @eji_09_16_23_2026_bot
+ENABLED_CHANNELS=whatsapp,webchat,telegram
+
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_EMAIL=mailto:admin@...
 ```
 
 ---
@@ -187,28 +203,29 @@ rm -rf auth/
 
 ## Estado actual del proyecto
 
-**Fecha de último análisis:** 2026-05-10
+**Fecha de último análisis:** 2026-05-12
 
 - ✅ Bot omnicanal en producción: WhatsApp + Telegram + WebChat
-- ✅ WhatsApp conectado — número `+507 61142198` (sesión en volumen Docker)
-- ✅ Telegram `@shavuot_bot` activo
-- ✅ WebChat disponible en `/jaiger-house.html` (widget flotante — renombrar si el cliente lo pide)
+- ✅ WhatsApp conectado — número `+507 61142198` (sesión en volumen Docker `varios_agente-wasap-omni_whatsapp-auth`)
+- ✅ Telegram `@eji_09_16_23_2026_bot` activo — texto + notas de voz (Groq Whisper)
+- ✅ WebChat disponible en `/techpadah.html` (widget flotante)
 - ✅ Dashboard en `https://varios-agente-wasap-omni.fjueze.easypanel.host/`
 - ✅ Autenticación via Appwrite Auth
-- ✅ System prompt activo en Appwrite `bot_settings`: TechPadah (IA, redes, web, cableado — Pedregal/Rana de Oro)
-- ✅ Configuración dinámica (system prompt, escalaciones, modelo LLM) vía Appwrite `bot_settings`
-- ✅ Off-topic limit: 3 mensajes fuera de scope → escalación forzada (conteo en Appwrite, determinístico)
+- ✅ System prompt TechPadah activo en Appwrite `bot_settings` singleton — catálogo con precios ficticios, restricción estricta de tema, 12 condiciones de escalación
+- ✅ Configuración dinámica (system prompt, escalaciones, modelo LLM) vía Appwrite `bot_settings` + `channel_settings` por plataforma
+- ✅ LLM fallback chain: ibm-granite → qwen → gemma → reka-edge → gemma-31b → gpt-4o-mini (automático en 429/5xx)
+- ✅ Off-topic limit: 2 intentos fuera de scope → escalación forzada (conteo en Appwrite, determinístico)
 - ✅ BANNED mode: bot ignora silenciosamente contactos bloqueados. Botón "Bloquear" en dashboard.
-- ✅ Notificación WhatsApp al host desde Telegram/WebChat via outbox (outbox JID fix aplicado)
-- ✅ `ENABLED_CHANNELS` — control de plan de pago por instalación (token presente ≠ canal activo)
+- ✅ Notificación WhatsApp al host desde Telegram/WebChat via outbox
+- ✅ `ENABLED_CHANNELS` — control de plan de pago por instalación
 - ✅ Push notifications para escalaciones
 - ✅ TypeScript sin errores de compilación
 - ✅ Bot robusto: no crashea en timeouts de red, no borra auth en bloqueos de IP
-- ✅ `/api/chat` y `/jaiger-house.html` marcados como rutas públicas en middleware
-- 📋 Plan blacklist futuro en `docs/blacklist-plan.md` (cuando hater use múltiples canales)
+- ✅ `/api/chat`, `/techpadah.html`, `/chat-widget.js`, `/sw.js` marcados como rutas públicas en middleware
+- 📋 Plan blacklist futuro en `docs/blacklist-plan.md`
 - 📋 Pendiente: mergear `feature/omnichannel` → `master`
 
-**EasyPanel API Key:** guardada en memoria local (`memory/credentials.md`) — no commitear a git.
+**EasyPanel API Key:** guardada en memoria local (`memory/reference_easypanel.md`) — no commitear a git.
 
 ---
 
@@ -224,8 +241,8 @@ Registra todos los servicios: `TablesDB`, `Users`, `Teams`, `Storage`, `Function
   "command": "python",
   "args": ["-m", "mcp_server_appwrite"],
   "env": {
-    "APPWRITE_PROJECT_ID": "69f7a4cc001de1e8b9b7",
-    "APPWRITE_ENDPOINT": "https://varios-appwrite.fjueze.easypanel.host/v1"
+    "APPWRITE_PROJECT_ID": "6a03855900044a4c6680",
+    "APPWRITE_ENDPOINT": "https://varios-appwrite-techpadah.fjueze.easypanel.host/v1"
   }
 }
 ```
@@ -234,52 +251,6 @@ Registra todos los servicios: `TablesDB`, `Users`, `Teams`, `Storage`, `Function
 > `python -m mcp_server_appwrite` (sin flags). Si falla, el módulo no está en el PATH de Python activo.
 
 ---
-
-## Próximo paso detallado: Login con Appwrite Auth
-
-**Decisión tomada:** Usar Appwrite Auth (Client SDK `appwrite`) en lugar de credenciales en `.env.local`.
-
-**Razón:** El dashboard no tiene autenticación — cualquiera con la URL ve todas las conversaciones.
-El Client SDK permite login real con sesiones gestionadas por Appwrite, compatible con el roadmap de múltiples agentes.
-
-### Flujo planeado
-
-```
-Usuario → /login → POST /api/auth/login
-                       ↓
-                  appwrite Client SDK
-                  account.createEmailPasswordSession()
-                       ↓
-                  Cookie httpOnly: "session-secret"
-                       ↓
-                  Redirect → /dashboard (o /)
-```
-
-```
-Cualquier ruta protegida → middleware.ts
-                               ↓
-                          Lee cookie "session-secret"
-                          account.get() para validar
-                               ↓
-                     Válida → continúa  |  Inválida → /login
-```
-
-### Archivos a crear/modificar
-
-| Acción | Archivo |
-|---|---|
-| Instalar | paquete `appwrite` (Client SDK — distinto de `node-appwrite`) |
-| Crear | `src/lib/appwrite-client.ts` (cliente sin API Key) |
-| Crear | `src/app/login/page.tsx` |
-| Crear | `src/app/api/auth/login/route.ts` |
-| Crear | `src/app/api/auth/logout/route.ts` |
-| Crear | `middleware.ts` (raíz del proyecto) |
-| Modificar | `src/app/layout.tsx` (o página raíz para redirigir si no está autenticado) |
-
-### Paso previo con MCP (antes de codificar)
-1. Verificar que el MCP `appwrite` responde: buscar herramienta `users_list` o similar
-2. Activar Email/Password auth en Appwrite (si no está activado)
-3. Crear el usuario del dashboard vía MCP: email + contraseña segura
 
 ---
 
@@ -591,49 +562,87 @@ Los campos vacíos heredan del `bot_settings` global. Solo se sobreescribe lo qu
 
 **Commit:** `8b271af` — 6 archivos, 694 inserciones.
 
-### 2026-05-12 — Integración de colecciones adicionales en branch `feature/omnichannel`
+### 2026-05-12/13 — Migración a servidor Appwrite nuevo (techpadah) + corrección de esquema omnicanal
 
-**Contexto:** El usuario proporciona nuevas credenciales del servidor Appwrite TechPadah. El `.env.local` en rama `feature/omnichannel` ya tenía las credenciales actualizadas, pero el script de setup no includía todas las colecciones necesarias.
+**Contexto:** PC del usuario se dañó, se perdieron archivos locales. Proyecto recuperado del repositorio Git.
+Servidor Appwrite migrado de `varios-appwrite.fjueze.easypanel.host` a `varios-appwrite-techpadah.fjueze.easypanel.host`.
 
-**Cambios realizados:**
+**Credenciales nuevas (guardadas en `.env.local` y EasyPanel):**
+- Endpoint: `https://varios-appwrite-techpadah.fjueze.easypanel.host/v1`
+- Project ID: `6a03855900044a4c6680`
+- Database ID: `6a03887a002f400d872c`
 
-1. **Actualización de `scripts/setup-appwrite.ts`:**
-   - Agregadas colecciones faltantes: `bot_settings`, `products`, `templates`
-   - `bot_settings` (colección de configuración dinámica): `system_prompt`, `welcome_message`, `human_timeout_hours`, `llm_model`, `host_phone`, `escalation_phrases`
-   - `products` (catálogo): `sku` (unique), `name`, `price`, `url`
-   - `templates` (respuestas rápidas): `label`, `content`, `createdAt`
+**Cambios en código:**
+- `easypanel.json` — rama `feature/omnichannel`, nuevas credenciales Appwrite, `TELEGRAM_BOT_TOKEN`, `ENABLED_CHANNELS`
+- `.github/workflows/docker.yml` — trigger en `master` (tag `latest`) y `feature/omnichannel` (tag `omni`)
+- `src/lib/baileys/client.ts` — `undefinedCodeStreak >= 3` ahora usa delay de 300000ms (5 min) en lugar de 2000ms para evitar bloqueo de IP por WhatsApp
+- `src/lib/db.ts` — `updateBotSettings` hace upsert (try UPDATE, si 404 hace CREATE) en lugar de fallar silenciosamente
 
-2. **Verificación:**
-   - `npm install` completado sin errores críticos (5 vulnerabilidades, conocidas)
-   - `npx tsc --noEmit` → 0 errores de TypeScript ✅
-   - Rama `feature/omnichannel` sincronizada con todas las colecciones necesarias
+**Correcciones en esquema Appwrite del servidor nuevo (vía API REST):**
+1. Atributos añadidos a `conversations`: `platform`, `externalId`, `tags`, `offtopicCount`
+2. Atributos añadidos a `bot_settings`: `offtopic_phrases`, `offtopic_limit`
+3. Colección `channel_settings` creada con todos sus atributos
+4. Índices creados en `conversations`: `platform_idx`, `platform_externalId_idx`
+5. Índice `platform_status_idx` creado en `outbox` (requerido por `getPendingOutbox`)
+6. `phone_unique` (UNIQUE en phone) **eliminado** — no compatible con múltiples plataformas
+7. `phone` en conversations cambiado a `required: false` — plataformas no-WhatsApp no tienen teléfono
+8. Bucket de Storage `media` creado — ID `"media"` (requerido por `BUCKET_ID` en `appwrite.ts`)
+9. Singleton `bot_settings` con ID `"singleton"` creado (system_prompt, llm_model, host_phone)
+10. Usuario `kike` en Appwrite Auth con label `admin` configurado (para ver selector de modelo LLM)
 
-3. **Commit:** `4e07131` — feat: add bot_settings, products, and templates collections to Appwrite setup script
+**`scripts/setup-appwrite.ts` actualizado (commit `aa57f97`):**
+- Incluye todos los atributos omnicanal en `conversations`
+- Incluye `bot_settings` y `channel_settings` colecciones completas
+- Sin `phone_unique` — usa `platform_externalId_idx` como clave de unicidad
+- `phone` definido como `required: false`
 
-**Ejecución completada (feature/omnichannel):**
+**Bug loop WhatsApp solucionado:**
+- Síntoma: bot obtenía código `undefined` en cada desconexión → reconectaba en 2s → bucle infinito → bloqueo de IP
+- Causa: `scheduleReconnect(2000, ...)` en `undefinedCodeStreak >= 3`
+- Fix: cambiar a `scheduleReconnect(300000, ...)` (5 min, igual que para 401)
 
-1. ✅ `npm install` — dependencias instaladas
-2. ✅ `npx tsx scripts/setup-new-collections.ts` — colecciones creadas en TechPadah
-   - `bot_settings` (ID: 6a038a16001ff19aab6f)
-   - `products`
-   - `templates`
-3. ✅ `npx tsx scripts/init-bot-settings.ts` — documento de configuración creado (ID: 6a0396d7000a54f43652)
-4. ✅ `npm run dev:all` — verificación exitosa (WEB + BOT procesos iniciados)
-5. ✅ `npx tsc --noEmit` — 0 errores TypeScript
+**Estado al cierre de sesión:**
+- WhatsApp conectado y respondiendo ✅
+- Telegram token válido (`@shavuot_bot`) ✅, env vars correctos en EasyPanel ✅
+- Telegram pendiente de confirmación de funcionamiento (usuario debe probar)
 
-**Nuevos scripts creados:**
-- `scripts/setup-new-collections.ts` — setup incremental (solo colecciones nuevas)
-- `scripts/init-bot-settings.ts` — inicializa documento de configuración
+### 2026-05-12 — Continuación: token Telegram, webchat widget, y system prompt TechPadah
 
-**Estado actual:** Rama `feature/omnichannel` completamente sincronizada con servidor TechPadah y lista para producción.
+**1. Token Telegram actualizado (bot `@eji_09_16_23_2026_bot`)**
+- Token anterior (`@shavuot_bot`) era incorrecto
+- Token correcto: `8305653649:AAG_X0wfuY6SWTpqj1M_Z_cz1FNBBpagv2g`
+- Actualizado en `.env.local` y en EasyPanel env vars, redeploy realizado
+- Diagnósticos añadidos a `scripts/start-telegram.ts`: logs de token/enabled al arranque y por mensaje
+- Tras el cambio, Telegram comenzó a funcionar ✅ (usuario confirmó)
 
-**Para arrancar localmente:**
-```bash
-# Editar .env.local con:
-# - OPENROUTER_API_KEY (obtener de https://openrouter.ai)
-# - HOST_PHONE (teléfono del asesor, ej: 50761142198)
-# - VAPID keys (opcionales, para push notifications)
+**2. Fix chat-widget.js → HTTP 307 en producción**
+- El widget de webchat de `techpadah.html` devolvía 307 (redirect a /login)
+- Causa: `/chat-widget.js` y `/sw.js` no estaban en `PUBLIC_PATHS` del middleware
+- Fix: añadidos a la lista en `src/middleware.ts` (commit `7543279`)
 
-npm install
-npm run dev:all  # Bot + Telegram + Dashboard en http://localhost:3000
-```
+**3. System prompt TechPadah detallado (guardado en Appwrite)**
+- Cliente: TechPadah — empresa tecnológica panameña (chatbots, redes, desarrollo web, cableado)
+- Script `scripts/save_system_prompt.py` creado para guardar vía API REST (evitar problemas de escape en bash)
+- Bot identity: "TechBot" — máximo 4 líneas por respuesta, sin rellenos genéricos
+- **Restricción absoluta de tema**: si pregunta fuera del ámbito de TechPadah, responde EXACTAMENTE: "Solo puedo ayudarle con información sobre los servicios de TechPadah. ¿Le interesa conocer alguno de nuestros servicios?"
+- Catálogo con precios ficticios en USD para 4 áreas:
+  - Chatbots IA: $299–$899/mes + $150 setup
+  - Redes: $75–$800 + $120/mes mantenimiento
+  - Desarrollo web: $450–$2,200 + $79/mes hosting
+  - Cableado estructurado: $20–$45/punto, rack desde $350
+- 12 condiciones de escalación a asesor
+- Frase exacta de escalación: "Déjame conectarte con uno de nuestros asesores para darte una propuesta personalizada."
+- 7 prohibiciones absolutas (NUNCA)
+- Guardado en Appwrite `bot_settings` singleton con:
+  - `offtopic_limit: 2`
+  - `offtopic_phrases: ["solo puedo ayudarle con informacion sobre los servicios de techpadah", ...]` (JSON array)
+  - `escalation_phrases: ["conectarte con uno de nuestros asesores", "déjame conectarte con uno de nuestros asesores", ...]` (JSON array)
+
+**Gotcha importante — Appwrite PATCH v1.8:**
+- La API REST de Appwrite 1.8 para PATCH de documentos requiere el body envuelto en `{"data": {...}}`, no los campos directamente en el body.
+
+**Estado al cierre:**
+- System prompt TechPadah activo en producción ✅
+- Telegram `@eji_09_16_23_2026_bot` funcionando ✅
+- webchat accesible sin auth (middleware PUBLIC_PATHS correcto) ✅
+- TypeScript: 0 errores ✅

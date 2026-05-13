@@ -474,7 +474,13 @@ export async function updateBotSettings(settings: Partial<BotSettings>): Promise
   if (settings.offtopic_phrases !== undefined) data.offtopic_phrases = settings.offtopic_phrases;
   if (settings.offtopic_limit !== undefined) data.offtopic_limit = settings.offtopic_limit;
 
-  await databases.updateDocument(DATABASE_ID, "bot_settings", SINGLETON_ID, data);
+  try {
+    await databases.updateDocument(DATABASE_ID, "bot_settings", SINGLETON_ID, data);
+  } catch (err: any) {
+    if (err?.code === 404) {
+      await databases.createDocument(DATABASE_ID, "bot_settings", SINGLETON_ID, data);
+    } else throw err;
+  }
 }
 
 export async function incrementOfftopicCount(conversationId: string): Promise<number> {
