@@ -741,3 +741,79 @@ await createAuditLog({
 - Dashboard con visualización de audit logs con detalles expandibles ✅
 - TypeScript: 0 errores ✅
 - Build: exitoso ✅
+
+### 2026-05-13 — Sistema de Roles y Control de Acceso
+
+**Arquitectura de 3 roles implementada:**
+
+1. **ADMIN** (acceso total)
+   - Todas las funciones: settings, audit logs, estadísticas, connect/disconnect bot, editar system prompt
+
+2. **SUPERVISOR** (monitoreo)
+   - Ver estadísticas, auditoría, configuración (solo lectura)
+   - Gestionar conversaciones y templates
+   - **NO puede**: conectar/desconectar bot, editar configuración, gestionar usuarios
+
+3. **OPERADOR** (operaciones básicas)
+   - Ver estadísticas
+   - Desconectar bot en emergencias
+   - **Solo eso** — el resto está oculto
+
+**Implementación:**
+
+1. **`src/lib/roles.ts`** — define `UserRole` type y matriz de permisos `ROLE_PERMISSIONS`
+   - Función `getUserRole(labels)` que extrae rol de labels de Appwrite
+   - Función `hasPermission(role, permission)` para validar acceso
+
+2. **`src/app/api/auth/me/route.ts`** — actualizado para usar labels de Appwrite
+   - En lugar de `DASHBOARD_USERS` env var, ahora lee `user.labels`
+   - Ejemplo: usuario con label `["supervisor"]` → rol "supervisor"
+
+3. **`src/components/DashboardHeader.tsx`** — renderizado condicional de botones
+   - Solo muestra botones que el usuario tiene permiso para usar
+   - Botones deshabilitados: nunca llaman a API (seguridad dual: frontend + backend)
+   - Tres valores posibles para rol: "Administrador", "Supervisor", "Operador"
+
+4. **`src/lib/route-permissions.ts`** — mapeo de rutas permitidas por rol
+   - `/settings` → admin, supervisor
+   - `/audit-logs` → admin, supervisor
+   - `/stats` → todos
+
+5. **`scripts/assign-roles.ts`** — script para asignar roles en batch
+   - Edita el objeto `roleAssignments` con email → rol
+   - Ejecuta: `npx tsx scripts/assign-roles.ts`
+   - Crea/actualiza labels en usuarios Appwrite
+
+6. **`docs/ROLES.md`** — documentación completa del sistema
+   - Instrucciones para asignar roles
+   - Matriz de permisos por rol
+   - Ejemplos de configuración
+
+**Asignación de roles actual (ejemplo):**
+```typescript
+const roleAssignments = {
+  // Admin: acceso total
+  // "admin@techpadah.com": "admin",
+  
+  // Supervisor: monitoreo
+  "jie@rent-den.sbs": "supervisor",
+  
+  // Operador: básico
+  // "operator@techpadah.com": "operator",
+};
+```
+
+**Notas de seguridad:**
+- Los permisos se validan también en **backend** (no confiar solo en UI)
+- Si un usuario intenta acceder a una ruta prohibida, se redirige a `/`
+- Appwrite **labels** son la fuente de verdad sobre roles (persisten)
+- El rol se obtiene en cada request desde `/api/auth/me`
+
+**Estado al cierre:**
+- ✅ Sistema de roles completo y funcional
+- ✅ Tres niveles de acceso claramente definidos
+- ✅ Supervisor con jie@rent-den.sbs asignado
+- ✅ Documentación completa en docs/ROLES.md
+- ✅ TypeScript: 0 errores
+- ✅ Build: exitoso
+- ✅ Push a GitHub: exitoso
