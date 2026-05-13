@@ -4,6 +4,7 @@ import {
   getOrCreateConversation,
   insertMessage,
   setMode,
+  getNextEscalationAgent,
 } from "../db";
 import { getActiveSettings } from "../system-prompt";
 import { storage, BUCKET_ID } from "../appwrite";
@@ -16,10 +17,10 @@ import os from "os";
 import path from "path";
 import { generateQuotePDF } from "../generate-quote-pdf";
 
-const groqClient = new OpenAI({
+const groqClient = process.env.GROQ_API_KEY ? new OpenAI({
   apiKey: process.env.GROQ_API_KEY,
   baseURL: "https://api.groq.com/openai/v1",
-});
+}) : null;
 
 async function notifyHost(
   sock: WASocket,
@@ -28,7 +29,8 @@ async function notifyHost(
   lastMessage: string
 ) {
   const settings = await getActiveSettings();
-  const hostPhone = settings.host_phone || process.env.HOST_PHONE;
+  const agentPhone = await getNextEscalationAgent();
+  const hostPhone = agentPhone || settings.host_phone || process.env.HOST_PHONE;
   if (!hostPhone) return;
 
   const resolvedPhone = resolveJid(clientPhone);
@@ -131,6 +133,10 @@ export default async function handleMessage(
       // ── Audios ────────────────────────────────────────────────────────────
       if (isAudio) {
         console.log(`[bot] ← Audio de ${phone}`);
+        if (!groqClient) {
+          console.log(`[bot] Audio ignorado: GROQ_API_KEY no configurado`);
+          continue;
+        }
         try {
           const buffer = await downloadMediaMessage(msg, "buffer", {}, {
             logger: console as any,

@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { Client, Databases, Query, Users } from "node-appwrite";
+import { Client, Users } from "node-appwrite";
 import { getUserRole } from "@/lib/roles";
-import { DATABASE_ID, COLLECTIONS } from "@/lib/appwrite";
-
-export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -12,7 +9,7 @@ export async function GET() {
     const userId = cookieStore.get("appwrite-user-id")?.value;
 
     if (!userId) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const client = new Client()
@@ -24,25 +21,30 @@ export async function GET() {
     const currentUser = await users.get(userId);
     const currentRole = getUserRole(currentUser.labels ?? []);
 
+    // Solo admin puede ver la lista de usuarios
     if (currentRole !== "admin") {
       return NextResponse.json(
-        { error: "Solo administradores pueden ver auditoría" },
+        { error: "Solo administradores pueden ver usuarios" },
         { status: 403 }
       );
     }
 
-    const databases = new Databases(client);
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      COLLECTIONS.audit_logs,
-      [Query.orderDesc("createdAt"), Query.limit(100)]
-    );
+    const userList = await users.list();
 
-    return NextResponse.json({ logs: response.documents });
+    const formattedUsers = userList.users.map((user) => ({
+      id: user.$id,
+      email: user.email,
+      name: user.name || user.email,
+      role: getUserRole(user.labels ?? []),
+      labels: user.labels ?? [],
+      createdAt: user.$createdAt,
+    }));
+
+    return NextResponse.json({ users: formattedUsers });
   } catch (err) {
-    console.error("Error fetching audit logs:", err);
+    console.error("Error fetching users:", err);
     return NextResponse.json(
-      { error: "Error al obtener auditoría" },
+      { error: "Error al obtener usuarios" },
       { status: 500 }
     );
   }

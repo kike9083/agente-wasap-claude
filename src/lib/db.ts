@@ -41,6 +41,8 @@ export interface BotSettings {
   escalation_phrases?: string;
   offtopic_phrases?: string;
   offtopic_limit?: number;
+  escalation_agents?: string;
+  escalation_agent_index?: number;
 }
 
 function docToConversation(doc: any): Conversation {
@@ -398,9 +400,16 @@ export async function notifyHostViaOutbox(
   clientName: string,
   lastMsg: string
 ): Promise<void> {
-  const hostPhone = process.env.HOST_PHONE;
+  console.log(`[notifyHostViaOutbox] Iniciando escalación desde ${platform}, cliente: ${clientName}`);
+
+  // Usar round-robin de agentes si están configurados, fallback a HOST_PHONE
+  const agentPhone = await getNextEscalationAgent();
+  console.log(`[notifyHostViaOutbox] getNextEscalationAgent retornó: ${agentPhone}`);
+
+  const hostPhone = agentPhone || process.env.HOST_PHONE;
+  console.log(`[notifyHostViaOutbox] Enviando notificación a: ${hostPhone}`);
   if (!hostPhone) {
-    console.warn("[notifyHostViaOutbox] HOST_PHONE no está configurado — notificación omitida");
+    console.warn("[notifyHostViaOutbox] No hay agentes ni HOST_PHONE configurado — notificación omitida");
     return;
   }
   const labels: Record<string, string> = { telegram: "Telegram", webchat: "WebChat", instagram: "Instagram", facebook: "Facebook" };
@@ -457,6 +466,8 @@ export async function getBotSettings(): Promise<BotSettings | null> {
       escalation_phrases: doc.escalation_phrases || "[]",
       offtopic_phrases: doc.offtopic_phrases || "[]",
       offtopic_limit: doc.offtopic_limit ?? 3,
+      escalation_agents: doc.escalation_agents || "[]",
+      escalation_agent_index: doc.escalation_agent_index ?? 0,
     };
   } catch {
     return null;
@@ -473,6 +484,8 @@ export async function updateBotSettings(settings: Partial<BotSettings>): Promise
   if (settings.escalation_phrases !== undefined) data.escalation_phrases = settings.escalation_phrases;
   if (settings.offtopic_phrases !== undefined) data.offtopic_phrases = settings.offtopic_phrases;
   if (settings.offtopic_limit !== undefined) data.offtopic_limit = settings.offtopic_limit;
+  if (settings.escalation_agents !== undefined) data.escalation_agents = settings.escalation_agents;
+  if (settings.escalation_agent_index !== undefined) data.escalation_agent_index = settings.escalation_agent_index;
 
   try {
     await databases.updateDocument(DATABASE_ID, "bot_settings", SINGLETON_ID, data);
@@ -598,4 +611,41 @@ export async function createAuditLog(log: {
     ...log,
     createdAt: Math.floor(Date.now() / 1000),
   }).catch(() => {});
+}
+
+export async function getNextEscalationAgent(): Promise<string | null> {
+  const settings = await getBotSettings();
+  if (!settings) {
+    console.log("[escalation] No settings found");
+    return null;
+  }
+
+  let agents: string[] = [];
+  try {
+    agents = JSON.parse(settings.escalation_agents || "[]");
+  } catch (e) {
+    console.error("[escalation] Error parsing agents:", settings.escalation_agents, e);
+    agents = [];
+  }
+
+  console.log("[escalation] Agents loaded:", agents, "Current index:", settings.escalation_agent_index);
+
+  if (agents.length === 0) {
+    console.log("[escalation] No agents configured, using fallback host_phone");
+    return null;
+  }
+
+  const index = settings.escalation_agent_index ?? 0;
+  const target = agents[index % agents.length];
+
+  console.log("[escalation] Routing to agent:", target, "(index", index, 'of', agents.length, ')');
+
+  const newIndex = (index + 1) % agents.length;
+  await databases.updateDocument(DATABASE_ID, "bot_settings", SINGLETON_ID, {
+    escalation_agent_index: newIndex,
+  }).catch((err) => {
+    console.error("[escalation] Failed to update index:", err);
+  });
+
+  return target;
 }

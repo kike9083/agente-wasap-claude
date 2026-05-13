@@ -80,3 +80,14 @@ El usuario **NO debe pedirte** que guardes los cambios. Hazlo siempre tú:
 ### Scripts Nuevos
 - `scripts/migrate-audit-logs.ts` — crear colección audit_logs
 - `scripts/assign-roles.ts` — asignar roles a usuarios por email
+- `scripts/migrate-escalation-agents.ts` — agregar atributos de escalación round-robin a bot_settings
+
+### Sistema de Escalación Round-Robin
+- **Funcionalidad**: Distribuir notificaciones de escalación entre múltiples agentes en turno rotativo
+- **Configuración**: En Settings → Global (solo admin), nueva sección "Agentes de Escalación"
+- **Almacenamiento**: 2 nuevos campos en `bot_settings`:
+  - `escalation_agents` — JSON array de números (máximo 5 agentes): `'["50762123","50698765"]'`
+  - `escalation_agent_index` — índice del siguiente agente (auto-incrementable)
+- **Comportamiento**: 1ª escalación → Agente 1, 2ª → Agente 2, 3ª → Agente 3, 4ª → Agente 1 (reinicia)
+- **Fallback**: Si no hay agentes configurados, usa `host_phone` como antes
+- **Función clave**: `getNextEscalationAgent()` en `src/lib/db.ts`

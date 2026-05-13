@@ -2,16 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { UserRoleManager } from "@/components/UserRoleManager";
+import { AuditLogs } from "@/components/AuditLogs";
 
 interface Template { id: string; text: string }
 
-type TabId = "global" | "whatsapp" | "telegram" | "webchat";
+type TabId = "global" | "whatsapp" | "telegram" | "webchat" | "roles" | "audit";
 
-const TABS: { id: TabId; label: string }[] = [
+const TABS: { id: TabId; label: string; adminOnly?: boolean }[] = [
   { id: "global", label: "Global" },
   { id: "whatsapp", label: "💬 WhatsApp" },
   { id: "telegram", label: "✈️ Telegram" },
   { id: "webchat", label: "🌐 WebChat" },
+  { id: "roles", label: "👥 Roles", adminOnly: true },
+  { id: "audit", label: "📋 Auditoría", adminOnly: true },
 ];
 
 interface ChannelForm {
@@ -73,6 +77,8 @@ export default function SettingsPage() {
   const [llmModel, setLlmModel] = useState("");
   const [hostPhone, setHostPhone] = useState("");
   const [escalationPhrases, setEscalationPhrases] = useState("");
+  const [escalationAgents, setEscalationAgents] = useState<string[]>([]);
+  const [newAgent, setNewAgent] = useState("");
 
   // Channel settings (keyed by platform)
   const [channelForms, setChannelForms] = useState<Record<string, ChannelForm>>({
@@ -115,6 +121,13 @@ export default function SettingsPage() {
             if (Array.isArray(parsed)) phrases = parsed.join("\n");
           } catch {}
           setEscalationPhrases(phrases);
+
+          let agents: string[] = [];
+          try {
+            const parsed = JSON.parse(data.settings.escalation_agents || "[]");
+            if (Array.isArray(parsed)) agents = parsed;
+          } catch {}
+          setEscalationAgents(agents);
         }
       })
       .finally(() => setLoading(false));
@@ -127,7 +140,7 @@ export default function SettingsPage() {
 
   // Cargar channel settings al cambiar de tab
   useEffect(() => {
-    if (activeTab === "global") return;
+    if (activeTab === "global" || activeTab === "roles" || activeTab === "audit") return;
     if (channelLoaded[activeTab]) return;
 
     fetch(`/api/channel-settings/${activeTab}`)
@@ -201,22 +214,29 @@ export default function SettingsPage() {
   const handleSaveGlobal = async () => {
     setSaving(true);
     try {
-      await fetch("/api/settings", {
+      const payload = {
+        system_prompt: prompt,
+        welcome_message: welcomeMsg,
+        human_timeout_hours: timeout,
+        llm_model: isAdmin ? llmModel : undefined,
+        host_phone: isAdmin ? hostPhone : undefined,
+        escalation_phrases: isAdmin
+          ? JSON.stringify(escalationPhrases.split("\n").map((s) => s.trim()).filter(Boolean))
+          : undefined,
+        escalation_agents: isAdmin ? JSON.stringify(escalationAgents) : undefined,
+        escalation_agent_index: isAdmin ? 0 : undefined,
+      };
+      console.log("DEBUG: Enviando payload a /api/settings:", payload);
+      const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_prompt: prompt,
-          welcome_message: welcomeMsg,
-          human_timeout_hours: timeout,
-          llm_model: isAdmin ? llmModel : undefined,
-          host_phone: isAdmin ? hostPhone : undefined,
-          escalation_phrases: isAdmin
-            ? JSON.stringify(escalationPhrases.split("\n").map((s) => s.trim()).filter(Boolean))
-            : undefined,
-        }),
+        body: JSON.stringify(payload),
       });
+      const resData = await res.json();
+      console.log("DEBUG: Respuesta del servidor:", resData);
       alert("Configuración global guardada correctamente.");
-    } catch {
+    } catch (err) {
+      console.error("DEBUG: Error al guardar:", err);
       alert("Error al guardar la configuración.");
     } finally {
       setSaving(false);
@@ -265,8 +285,10 @@ export default function SettingsPage() {
   }
 
   const currentChannelForm = channelForms[activeTab] ?? EMPTY_CHANNEL;
-  const channelTabLoading = activeTab !== "global" && !channelLoaded[activeTab];
-  const visibleTabs = TABS.filter((t) => t.id === "global" || enabledChannels.includes(t.id));
+  const channelTabLoading = activeTab !== "global" && activeTab !== "roles" && activeTab !== "audit" && !channelLoaded[activeTab];
+  const visibleTabs = TABS.filter(
+    (t) => t.id === "global" || enabledChannels.includes(t.id) || (t.adminOnly && isAdmin)
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -406,6 +428,65 @@ export default function SettingsPage() {
                       placeholder="déjame conectarte con un asesor..."
                     />
                   </div>
+
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Agentes de Escalación (Round-Robin)
+                    </label>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Números de WhatsApp que recibirán turnadamente las escalaciones. Si está vacío, se usará el número del Host.
+                    </p>
+                    <div className="space-y-2 mb-3">
+                      {escalationAgents.length === 0 && (
+                        <p className="text-sm text-gray-400 italic">Sin agentes configurados</p>
+                      )}
+                      {escalationAgents.map((agent, idx) => (
+                        <div key={idx} className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                          <span className="text-sm font-mono text-blue-900 flex-1">{agent}</span>
+                          <button
+                            type="button"
+                            onClick={() => setEscalationAgents(escalationAgents.filter((_, i) => i !== idx))}
+                            className="text-red-400 hover:text-red-600 transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        className="flex-1 border border-gray-300 rounded-md p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                        placeholder="50762123456"
+                        value={newAgent}
+                        onChange={(e) => setNewAgent(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (newAgent.trim() && escalationAgents.length < 5) {
+                              setEscalationAgents([...escalationAgents, newAgent.trim()]);
+                              setNewAgent("");
+                            }
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (newAgent.trim() && escalationAgents.length < 5) {
+                            setEscalationAgents([...escalationAgents, newAgent.trim()]);
+                            setNewAgent("");
+                          }
+                        }}
+                        disabled={!newAgent.trim() || escalationAgents.length >= 5}
+                        className="px-4 py-3 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Agregar
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -423,8 +504,22 @@ export default function SettingsPage() {
           </>
         )}
 
+        {/* ── TAB ROLES ── */}
+        {activeTab === "roles" && (
+          <div className="bg-white shadow rounded-lg p-6">
+            <UserRoleManager />
+          </div>
+        )}
+
+        {/* ── TAB AUDITORÍA ── */}
+        {activeTab === "audit" && (
+          <div className="bg-white shadow rounded-lg p-6">
+            <AuditLogs />
+          </div>
+        )}
+
         {/* ── TABS DE CANAL ── */}
-        {activeTab !== "global" && (
+        {activeTab !== "global" && activeTab !== "roles" && activeTab !== "audit" && (
           <>
             {channelTabLoading ? (
               <div className="bg-white shadow rounded-lg p-6 text-center text-gray-400 text-sm">

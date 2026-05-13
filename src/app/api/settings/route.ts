@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getBotSettings, updateBotSettings, createAuditLog } from "@/lib/db";
+import { invalidateChannelCache } from "@/lib/system-prompt";
 
 export async function GET() {
   try {
@@ -21,8 +22,18 @@ export async function POST(request: Request) {
     const userId = cookieStore.get("appwrite-user-id")?.value ?? "unknown";
     const userEmail = cookieStore.get("appwrite-user-email")?.value;
 
+    console.log("[API /api/settings] POST request body:", JSON.stringify({
+      escalation_agents: body.escalation_agents,
+      escalation_agent_index: body.escalation_agent_index,
+    }));
+
     const oldSettings = await getBotSettings();
     await updateBotSettings(body);
+
+    // Invalidate cache so bot picks up new settings immediately
+    invalidateChannelCache();
+
+    console.log("[API /api/settings] Settings updated successfully");
 
     // Registrar cambio en audit log con antes/después
     const changes: Record<string, { before: unknown; after: unknown }> = {};
