@@ -55,3 +55,28 @@ El usuario **NO debe pedirte** que guardes los cambios. Hazlo siempre tú:
 | 16 | `offtopic_phrases` y `escalation_phrases` deben ser JSON array como string | El código hace `JSON.parse()` sobre estos campos. Guardar como `'["frase1","frase2"]'`, NO como texto plano |
 | 17 | Notas de voz en Telegram requieren `GROQ_API_KEY` | El handler `bot.on("voice")` descarga el OGG y transcribe con Whisper. Sin la key, responde con mensaje de error al usuario |
 | 18 | Modelos LLM con function calling no soportan `tools` en todos los providers | Si un modelo falla con 400 en la segunda llamada (tool result), puede ser que no soporte tool calling. Cambiar modelo en `bot_settings.llm_model` o quitar la tool del sistema |
+
+---
+
+## Características Recientes (Mayo 2026)
+
+### Sistema de Auditoría (Audit Logs)
+- **Colección**: `audit_logs` en Appwrite
+- **Qué registra**: Quién hizo qué, cuándo, con valores antes/después
+- **Rutas**: `/api/audit-logs` (GET) y `/audit-logs` (página de visualización)
+- **Cubierto**: settings, channel-settings, modo, templates, conversaciones
+- Ver docs: `docs/ROLES.md`
+
+### Sistema de Roles
+- **3 niveles**: Admin (total), Supervisor (monitoreo), Operator (básico)
+- **Fuente**: Labels en usuarios Appwrite (no env vars)
+- **Dónde**: `src/lib/roles.ts` define permisos
+- **Asignar**: `npx tsx scripts/assign-roles.ts` (edita el script con emails)
+- **Ver**: `docs/ROLES.md` para matriz completa de permisos
+
+### Nuevas Colecciones Appwrite
+- **`audit_logs`**: action, userId, userEmail, resourceType, resourceId, detail, createdAt con índice desc
+
+### Scripts Nuevos
+- `scripts/migrate-audit-logs.ts` — crear colección audit_logs
+- `scripts/assign-roles.ts` — asignar roles a usuarios por email

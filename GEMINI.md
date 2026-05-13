@@ -103,6 +103,7 @@ Si el modelo activo falla con 429 o 5xx → intenta el siguiente automáticament
 | `bot_settings` | Singleton: system_prompt, llm_model, escalation_phrases, offtopic_limit, etc. (ID: `singleton`) |
 | `channel_settings` | Config por canal; campo vacío hereda de bot_settings (doc ID = nombre de plataforma) |
 | `products` | Catálogo de productos para function calling |
+| `audit_logs` | Registro de auditoría: quién hizo qué, cuándo, con antes/después (Mayo 2026) |
 
 ## MCP de Appwrite
 
@@ -133,11 +134,40 @@ TELEGRAM_BOT_TOKEN              ← bot @eji_09_16_23_2026_bot
 ENABLED_CHANNELS=whatsapp,webchat,telegram
 ```
 
-## Comandos útiles
+## Características Recientes (Mayo 2026)
+
+### Sistema de Auditoría (Audit Logs)
+- **Colección**: `audit_logs` en Appwrite
+- **Qué registra**: Action, userId, userEmail, resourceType, resourceId, detail (con antes/después), createdAt
+- **API**: GET `/api/audit-logs?offset=0&limit=100` (paginada)
+- **UI**: `/audit-logs` con tabla, detalles expandibles, color-coded badges
+- **Cubierto**: settings, channel-settings, modo conversación, templates, conversaciones
+- Ver detalles: `docs/ROLES.md`
+
+### Sistema de Roles (3 niveles)
+- **Admin**: Acceso total a todo
+- **Supervisor**: Ver estadísticas, auditoría, configuración (solo lectura), gestionar conversaciones/templates
+  - NO: Conectar/desconectar bot, editar configuración
+- **Operator**: Solo estadísticas y desconectar bot
+- **Fuente**: Labels de usuarios Appwrite (`admin`, `supervisor`, `operator`)
+- **Dónde**: `src/lib/roles.ts` define la matriz de permisos `ROLE_PERMISSIONS`
+
+### Archivos Nuevos
+| Archivo | Propósito |
+|---|---|
+| `src/lib/roles.ts` | Definición de roles y matriz de permisos |
+| `src/lib/route-permissions.ts` | Mapeo de rutas permitidas por rol |
+| `scripts/assign-roles.ts` | Asignar roles a usuarios (edita y ejecuta) |
+| `scripts/migrate-audit-logs.ts` | Crear colección audit_logs en Appwrite |
+| `docs/ROLES.md` | Documentación completa del sistema de roles |
+
+## Comandos útiles (Actualizado)
 
 ```bash
 npm run dev:all          # Bot + Telegram + dashboard
 npx tsc --noEmit         # Verificar TypeScript
 npx tsx scripts/setup-appwrite.ts   # Setup BD (solo primera vez)
+npx tsx scripts/migrate-audit-logs.ts  # Crear colección audit_logs
+npx tsx scripts/assign-roles.ts   # Asignar roles (edita script primero)
 python scripts/save_system_prompt.py  # Actualizar system prompt en Appwrite
 ```
