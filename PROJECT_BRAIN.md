@@ -590,3 +590,47 @@ Los campos vacíos heredan del `bot_settings` global. Solo se sobreescribe lo qu
 5. **`src/app/settings/page.tsx`** — UI con tabs: Global / 💬 WhatsApp / ✈️ Telegram / 🌐 WebChat. Cada tab de canal carga configuración lazy (solo al hacer click). Campo `LlmSelect` extraído como componente reutilizable con opción "Heredar del Global".
 
 **Commit:** `8b271af` — 6 archivos, 694 inserciones.
+
+### 2026-05-12/13 — Migración a servidor Appwrite nuevo (techpadah) + corrección de esquema omnicanal
+
+**Contexto:** PC del usuario se dañó, se perdieron archivos locales. Proyecto recuperado del repositorio Git.
+Servidor Appwrite migrado de `varios-appwrite.fjueze.easypanel.host` a `varios-appwrite-techpadah.fjueze.easypanel.host`.
+
+**Credenciales nuevas (guardadas en `.env.local` y EasyPanel):**
+- Endpoint: `https://varios-appwrite-techpadah.fjueze.easypanel.host/v1`
+- Project ID: `6a03855900044a4c6680`
+- Database ID: `6a03887a002f400d872c`
+
+**Cambios en código:**
+- `easypanel.json` — rama `feature/omnichannel`, nuevas credenciales Appwrite, `TELEGRAM_BOT_TOKEN`, `ENABLED_CHANNELS`
+- `.github/workflows/docker.yml` — trigger en `master` (tag `latest`) y `feature/omnichannel` (tag `omni`)
+- `src/lib/baileys/client.ts` — `undefinedCodeStreak >= 3` ahora usa delay de 300000ms (5 min) en lugar de 2000ms para evitar bloqueo de IP por WhatsApp
+- `src/lib/db.ts` — `updateBotSettings` hace upsert (try UPDATE, si 404 hace CREATE) en lugar de fallar silenciosamente
+
+**Correcciones en esquema Appwrite del servidor nuevo (vía API REST):**
+1. Atributos añadidos a `conversations`: `platform`, `externalId`, `tags`, `offtopicCount`
+2. Atributos añadidos a `bot_settings`: `offtopic_phrases`, `offtopic_limit`
+3. Colección `channel_settings` creada con todos sus atributos
+4. Índices creados en `conversations`: `platform_idx`, `platform_externalId_idx`
+5. Índice `platform_status_idx` creado en `outbox` (requerido por `getPendingOutbox`)
+6. `phone_unique` (UNIQUE en phone) **eliminado** — no compatible con múltiples plataformas
+7. `phone` en conversations cambiado a `required: false` — plataformas no-WhatsApp no tienen teléfono
+8. Bucket de Storage `media` creado — ID `"media"` (requerido por `BUCKET_ID` en `appwrite.ts`)
+9. Singleton `bot_settings` con ID `"singleton"` creado (system_prompt, llm_model, host_phone)
+10. Usuario `kike` en Appwrite Auth con label `admin` configurado (para ver selector de modelo LLM)
+
+**`scripts/setup-appwrite.ts` actualizado (commit `aa57f97`):**
+- Incluye todos los atributos omnicanal en `conversations`
+- Incluye `bot_settings` y `channel_settings` colecciones completas
+- Sin `phone_unique` — usa `platform_externalId_idx` como clave de unicidad
+- `phone` definido como `required: false`
+
+**Bug loop WhatsApp solucionado:**
+- Síntoma: bot obtenía código `undefined` en cada desconexión → reconectaba en 2s → bucle infinito → bloqueo de IP
+- Causa: `scheduleReconnect(2000, ...)` en `undefinedCodeStreak >= 3`
+- Fix: cambiar a `scheduleReconnect(300000, ...)` (5 min, igual que para 401)
+
+**Estado al cierre de sesión:**
+- WhatsApp conectado y respondiendo ✅
+- Telegram token válido (`@shavuot_bot`) ✅, env vars correctos en EasyPanel ✅
+- Telegram pendiente de confirmación de funcionamiento (usuario debe probar)
