@@ -50,6 +50,7 @@ export function DashboardHeader({
   const router = useRouter();
   const [userName, setUserName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<UserRole>("operator");
+  const [loadingPermissions, setLoadingPermissions] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(false);
   const permissions = ROLE_PERMISSIONS[userRole];
 
@@ -62,7 +63,8 @@ export function DashboardHeader({
           setUserRole(data.user.role ?? "operator");
         }
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setLoadingPermissions(false));
 
     if (typeof window !== "undefined" && Notification.permission === "granted") {
       registerPush().catch(console.error);
@@ -178,7 +180,11 @@ export function DashboardHeader({
             )}
 
             {/* Conectar/Desconectar Bot */}
-            {permissions.canDisconnectBot ? (
+            {loadingPermissions ? (
+              <div className="p-2 rounded-xl bg-gray-50 ring-1 ring-gray-100">
+                <div className="h-5 w-5 rounded-full border-2 border-gray-300 border-t-gray-500 animate-spin" />
+              </div>
+            ) : permissions.canDisconnectBot ? (
               isConnected ? (
                 <button
                   type="button"
