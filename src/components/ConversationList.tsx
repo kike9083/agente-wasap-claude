@@ -67,13 +67,23 @@ interface ConversationListProps {
   conversations: Conversation[];
   selectedId?: string;
   onSelect: (id: string) => void;
+  onBulkDelete?: (ids: string[]) => Promise<void>;
+  canDelete?: boolean;
 }
 
-export function ConversationList({ conversations, selectedId, onSelect }: ConversationListProps) {
+export function ConversationList({
+  conversations,
+  selectedId,
+  onSelect,
+  onBulkDelete,
+  canDelete = false,
+}: ConversationListProps) {
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<TabValue>("all");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
-  // Detectar qué plataformas tienen conversaciones
   const activePlatforms = new Set(conversations.map((c) => c.platform));
 
   const filtered = conversations.filter((c) => {
@@ -86,6 +96,44 @@ export function ConversationList({ conversations, selectedId, onSelect }: Conver
       c.last_message_preview?.toLowerCase().includes(q)
     );
   });
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((c) => selected.has(c.id));
+
+  function toggleSelectMode() {
+    setSelectMode((v) => !v);
+    setSelected(new Set());
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (allFilteredSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map((c) => c.id)));
+    }
+  }
+
+  async function handleDeleteSelected() {
+    if (!onBulkDelete || selected.size === 0) return;
+    if (!confirm(`¿Borrar ${selected.size} conversación${selected.size !== 1 ? "es" : ""}? Esta acción no se puede deshacer.`)) return;
+    setDeleting(true);
+    try {
+      await onBulkDelete(Array.from(selected));
+      setSelected(new Set());
+      setSelectMode(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -114,9 +162,9 @@ export function ConversationList({ conversations, selectedId, onSelect }: Conver
         ))}
       </div>
 
-      {/* Buscador */}
-      <div className="px-3 py-2 border-b border-gray-100 shrink-0">
-        <div className="relative">
+      {/* Buscador + botón seleccionar */}
+      <div className="px-3 py-2 border-b border-gray-100 shrink-0 flex gap-2 items-center">
+        <div className="relative flex-1">
           <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none"
             fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
@@ -137,7 +185,55 @@ export function ConversationList({ conversations, selectedId, onSelect }: Conver
             </button>
           )}
         </div>
+
+        {canDelete && (
+          <button
+            type="button"
+            onClick={toggleSelectMode}
+            title={selectMode ? "Cancelar selección" : "Seleccionar para borrar"}
+            className={`p-1.5 rounded-lg text-xs font-medium transition-all shrink-0 ${
+              selectMode
+                ? "bg-red-50 text-red-600 ring-1 ring-red-200"
+                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+            }`}
+          >
+            {selectMode ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            )}
+          </button>
+        )}
       </div>
+
+      {/* Barra de selección masiva */}
+      {selectMode && (
+        <div className="px-3 py-2 border-b border-gray-100 bg-red-50 shrink-0 flex items-center justify-between gap-2">
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700 select-none">
+            <input
+              type="checkbox"
+              checked={allFilteredSelected}
+              onChange={toggleAll}
+              className="h-4 w-4 rounded accent-red-500"
+            />
+            <span className="text-xs font-medium">
+              {selected.size > 0 ? `${selected.size} seleccionado${selected.size !== 1 ? "s" : ""}` : "Seleccionar todos"}
+            </span>
+          </label>
+          <button
+            type="button"
+            onClick={handleDeleteSelected}
+            disabled={selected.size === 0 || deleting}
+            className="px-3 py-1.5 text-xs font-semibold bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {deleting ? "Borrando..." : `Borrar${selected.size > 0 ? ` (${selected.size})` : ""}`}
+          </button>
+        </div>
+      )}
 
       {/* Lista */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
@@ -147,49 +243,62 @@ export function ConversationList({ conversations, selectedId, onSelect }: Conver
           </p>
         ) : (
           filtered.map((conv) => (
-            <button
-              type="button"
+            <div
               key={conv.id}
-              onClick={() => onSelect(conv.id)}
-              className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition ${
-                selectedId === conv.id ? "bg-gray-100 border-l-4 border-l-emerald-500" : ""
-              }`}
+              className={`flex items-start border-b border-gray-100 hover:bg-gray-50 transition ${
+                selectedId === conv.id && !selectMode ? "bg-gray-100 border-l-4 border-l-emerald-500" : ""
+              } ${selectMode && selected.has(conv.id) ? "bg-red-50" : ""}`}
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {/* Badge de plataforma */}
-                    <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${PLATFORM_COLORS[conv.platform]}`}>
-                      {PLATFORM_ICONS[conv.platform]} {PLATFORM_LABELS[conv.platform]}
-                    </span>
-                    <p className="font-medium text-sm text-gray-900 truncate">
-                      {displayName(conv)}
-                    </p>
-                    {conv.mode === "HUMAN" && (
-                      <span className="relative flex h-2 w-2 shrink-0">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+              {selectMode && (
+                <div className="flex items-center pl-3 pt-3.5">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(conv.id)}
+                    onChange={() => toggleOne(conv.id)}
+                    className="h-4 w-4 rounded accent-red-500"
+                  />
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => selectMode ? toggleOne(conv.id) : onSelect(conv.id)}
+                className="flex-1 text-left px-4 py-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${PLATFORM_COLORS[conv.platform]}`}>
+                        {PLATFORM_ICONS[conv.platform]} {PLATFORM_LABELS[conv.platform]}
                       </span>
-                    )}
+                      <p className="font-medium text-sm text-gray-900 truncate">
+                        {displayName(conv)}
+                      </p>
+                      {conv.mode === "HUMAN" && (
+                        <span className="relative flex h-2 w-2 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 truncate mt-0.5">
+                      {conv.last_message_preview || "Sin mensajes"}
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">
-                    {conv.last_message_preview || "Sin mensajes"}
-                  </p>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      conv.mode === "AI"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}>
+                      {conv.mode === "AI" ? "IA" : "HUMANO"}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {formatRelativeTime(conv.last_message_at)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                    conv.mode === "AI"
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-amber-100 text-amber-700"
-                  }`}>
-                    {conv.mode === "AI" ? "IA" : "HUMANO"}
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    {formatRelativeTime(conv.last_message_at)}
-                  </span>
-                </div>
-              </div>
-            </button>
+              </button>
+            </div>
           ))
         )}
       </div>

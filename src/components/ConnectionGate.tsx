@@ -5,6 +5,7 @@ import { QRScreen } from "./QRScreen";
 import { DashboardHeader } from "./DashboardHeader";
 import { ConversationList } from "./ConversationList";
 import { ConversationPanel } from "./ConversationPanel";
+import { ROLE_PERMISSIONS, type UserRole } from "@/lib/roles";
 
 interface Conversation {
   id: string;
@@ -39,8 +40,16 @@ export function ConnectionGate() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [userRole, setUserRole] = useState<UserRole>("operator");
   // En mobile: "list" muestra la lista, "panel" muestra la conversación
   const [mobileView, setMobileView] = useState<"list" | "panel">("list");
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => { if (d.user?.role) setUserRole(d.user.role); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const pollStatus = setInterval(async () => {
@@ -139,6 +148,20 @@ export function ConnectionGate() {
     }
   };
 
+  const handleBulkDelete = async (ids: string[]) => {
+    await fetch("/api/conversations/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    setConversations((prev) => prev.filter((c) => !ids.includes(c.id)));
+    if (selectedConvId && ids.includes(selectedConvId)) {
+      setSelectedConvId(undefined);
+      setMessages([]);
+      setMobileView("list");
+    }
+  };
+
   const handleDeleteConversation = async () => {
     if (!selectedConvId) return;
     try {
@@ -176,6 +199,8 @@ export function ConnectionGate() {
             conversations={conversations}
             selectedId={selectedConvId}
             onSelect={handleSelectConversation}
+            onBulkDelete={handleBulkDelete}
+            canDelete={ROLE_PERMISSIONS[userRole].canDeleteConversation}
           />
         </div>
 

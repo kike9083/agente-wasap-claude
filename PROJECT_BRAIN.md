@@ -1097,3 +1097,23 @@ Antes de confirmar una cita, se hace query a `appointments` por `fecha + hora`. 
 **Verificaciones completadas:**
 - ✅ `npx tsx scripts/setup-customers-appointments.ts` — 2 colecciones creadas + conv_state + scheduling_phrases
 - ✅ `npx tsc --noEmit` → 0 errores TypeScript
+
+### 2026-05-15 — Borrado masivo de conversaciones
+
+**Feature agregado:**
+Selección múltiple de chats para borrar en lote desde la lista de conversaciones.
+
+- Nuevo botón de portapapeles en la barra de búsqueda del `ConversationList` — solo visible si el rol tiene `canDeleteConversation`
+- Al activar el modo selección: aparecen checkboxes en cada fila + barra roja con "Seleccionar todos" y botón "Borrar (N)"
+- Confirmación antes de borrar
+- Nueva API: `POST /api/conversations/bulk-delete` — recibe `{ ids: string[] }`, borra en serie y registra cada una en audit_logs
+- `ConnectionGate` obtiene el rol del usuario via `/api/auth/me` para pasar `canDelete` al componente
+
+**Archivos modificados:**
+- `src/components/ConversationList.tsx` — modo selección con checkboxes
+- `src/components/ConnectionGate.tsx` — handler `handleBulkDelete` + prop `canDelete`
+
+**Archivo creado:**
+- `src/app/api/conversations/bulk-delete/route.ts`
+
+**Verificación:** `npx tsc --noEmit` → 0 errores
