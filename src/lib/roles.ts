@@ -14,6 +14,9 @@ export interface RolePermissions {
   canRespondChats: boolean;
   canTagConversations: boolean;
 
+  // CRM
+  canViewAppointments: boolean;
+
   // Acciones de Operación (Supervisor)
   canPauseAI: boolean;
   canRestartWhatsAppSession: boolean;
@@ -36,6 +39,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canViewAuditLogs: true,
     canViewTemplates: true,
     canViewConversations: true,
+
+    // CRM
+    canViewAppointments: true,
 
     // Conversación
     canChangeMode: true,
@@ -65,6 +71,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canViewTemplates: true,
     canViewConversations: true,
 
+    // CRM
+    canViewAppointments: true,
+
     // Conversación
     canChangeMode: true,
     canDeleteConversation: true,
@@ -92,6 +101,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canViewAuditLogs: false,
     canViewTemplates: true,
     canViewConversations: false,
+
+    // CRM ❌ Operador no ve citas
+    canViewAppointments: false,
 
     // Conversación ✅ Operador atiende chats
     canChangeMode: false,

@@ -18,6 +18,8 @@ export const COLLECTIONS = {
   outbox: "outbox",
   restart_flag: "restart_flag",
   audit_logs: "audit_logs",
+  customers: "customers",
+  appointments: "appointments",
 } as const;
 
 // ID fijo para documentos singleton

@@ -1037,3 +1037,63 @@ El bot puede arrancar sin `GROQ_API_KEY`. Si no está configurada, los audios se
 - ✅ Commit y push a `feature/omnichannel` — deploy en EasyPanel
 - ✅ Round-robin confirmado funcionando en producción (logs verificados)
 - ✅ Bot arranca correctamente sin GROQ_API_KEY
+
+
+### 2026-05-14 — CRM: Registro de Clientes y Agendamiento de Citas
+
+**Features agregados en esta sesión:**
+
+#### 1. Motor de estado de conversación (flujo pregunta-respuesta)
+Nuevo archivo `src/lib/core/conversation-state.ts` que implementa una máquina de estados para guiar al cliente a través del registro y agendamiento:
+- Pasos: nombre → apellido → teléfono celular → servicio → fecha → hora → notas → confirmación
+- El cliente puede escribir `cancelar` en cualquier momento para abortar el flujo
+- El trigger se activa detectando palabras clave: `agendar`, `cita`, `reservar`, `turno`, `programar`
+- Configurable via `bot_settings.scheduling_phrases` (JSON array string)
+- El estado se persiste en `conv_state` (campo nuevo en conversaciones) para sobrevivir reinicios del bot
+
+#### 2. Nuevas colecciones Appwrite
+- **`customers`**: nombre, apellido, telefonoCelular, conversationId, platform, createdAt
+- **`appointments`**: customerId, conversationId, tipoServicio, fecha, hora, notas, status (pending/confirmed/cancelled/completed), googleEventId, createdAt
+- Campo **`conv_state`** añadido a `conversations`
+- Campo **`scheduling_phrases`** añadido a `bot_settings`
+
+#### 3. Integración con Google Calendar (Service Account)
+Nuevo archivo `src/lib/google-calendar.ts`:
+- Usa Service Account de Google Cloud (sin OAuth2, sin browser)
+- Si no están configuradas las vars, retorna null silenciosamente (cita queda en Appwrite)
+- Setup vars: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_CALENDAR_ID`
+- Evento dura 1 hora, timezone America/Panama (UTC-5)
+
+#### 4. Dashboard de Citas `/appointments`
+- Nuevo archivo `src/app/appointments/page.tsx` — tabla con todas las citas
+- API en `src/app/api/appointments/route.ts` (GET con filtro por status, PATCH para cambiar status)
+- Acciones por fila: Confirmar / Completar / Cancelar
+- Visible solo para Admin y Supervisor (nuevo permiso `canViewAppointments` en `src/lib/roles.ts`)
+- Botón "Citas" añadido en `DashboardHeader.tsx` (color teal, ícono calendario)
+
+#### 5. Verificación de disponibilidad
+Antes de confirmar una cita, se hace query a `appointments` por `fecha + hora`. Si existe otra cita no cancelada en ese horario, se rechaza y se pide otro.
+
+**Archivos creados:**
+- `scripts/setup-customers-appointments.ts` — migración Appwrite (ejecutado ✅)
+- `src/lib/core/conversation-state.ts`
+- `src/lib/google-calendar.ts`
+- `src/app/appointments/page.tsx`
+- `src/app/api/appointments/route.ts`
+- `PLAN_CRM_CITAS.md` — plan de implementación en la raíz
+
+**Archivos modificados:**
+- `src/lib/appwrite.ts` — añadidos `customers` y `appointments` a COLLECTIONS
+- `src/lib/db.ts` — nuevas interfaces Customer, Appointment; nuevas funciones: createCustomer, getCustomerByConversation, createAppointment, listAppointments, updateAppointmentStatus, checkSlotAvailability, updateConvState; campo conv_state en Conversation; scheduling_phrases en BotSettings
+- `src/lib/core/message-processor.ts` — integra flujo de registro antes del LLM
+- `src/lib/roles.ts` — añadido canViewAppointments (admin: true, supervisor: true, operator: false)
+- `src/components/DashboardHeader.tsx` — botón "Citas"
+- `.env.example` — vars Google Calendar
+- `CLAUDE.md` — documentados nuevos features y gotchas
+
+**Paquetes instalados:**
+- `googleapis@171.4.0`
+
+**Verificaciones completadas:**
+- ✅ `npx tsx scripts/setup-customers-appointments.ts` — 2 colecciones creadas + conv_state + scheduling_phrases
+- ✅ `npx tsc --noEmit` → 0 errores TypeScript

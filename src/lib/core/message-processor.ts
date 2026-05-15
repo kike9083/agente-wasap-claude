@@ -11,6 +11,7 @@ import {
 import { generateReply } from "../openrouter";
 import { getActiveSettings } from "../system-prompt";
 import { sendPushToAll } from "../push";
+import { handleConvState, isSchedulingTrigger, startRegistrationFlow } from "./conversation-state";
 
 export interface ProcessMessageInput {
   platform: Platform;
@@ -57,6 +58,15 @@ export async function processMessage(
   const fresh = await getConversationById(conversationId);
   if (!fresh || fresh.mode !== "AI") {
     return { replied: false, wasEscalation: false, wasWelcome: false };
+  }
+
+  // ── Flujo de registro y agendamiento ────────────────────────────────────
+  if (fresh.conv_state) {
+    const consumed = await handleConvState(fresh, text, sendReply);
+    if (consumed) return { replied: true, wasEscalation: false, wasWelcome: false };
+  } else if (isSchedulingTrigger(text, settings.scheduling_phrases)) {
+    await startRegistrationFlow(conversationId, sendReply);
+    return { replied: true, wasEscalation: false, wasWelcome: false };
   }
 
   // ── Llamar al LLM ────────────────────────────────────────────────────────

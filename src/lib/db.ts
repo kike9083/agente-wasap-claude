@@ -15,6 +15,32 @@ export interface Conversation {
   created_at: number;
   tags: string[];
   offtopic_count: number;
+  conv_state: string | null;
+}
+
+export interface Customer {
+  id: string;
+  conversationId: string;
+  platform: Platform;
+  nombre: string;
+  apellido: string;
+  telefonoCelular: string;
+  created_at: number;
+}
+
+export type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "completed";
+
+export interface Appointment {
+  id: string;
+  customerId: string | null;
+  conversationId: string;
+  tipoServicio: string;
+  fecha: string;
+  hora: string;
+  notas: string | null;
+  status: AppointmentStatus;
+  googleEventId: string | null;
+  created_at: number;
 }
 
 export interface Message {
@@ -43,6 +69,7 @@ export interface BotSettings {
   offtopic_limit?: number;
   escalation_agents?: string;
   escalation_agent_index?: number;
+  scheduling_phrases?: string;
 }
 
 function docToConversation(doc: any): Conversation {
@@ -60,6 +87,34 @@ function docToConversation(doc: any): Conversation {
     created_at: doc.createdAt,
     tags,
     offtopic_count: doc.offtopicCount ?? 0,
+    conv_state: doc.conv_state ?? null,
+  };
+}
+
+function docToCustomer(doc: any): Customer {
+  return {
+    id: doc.$id,
+    conversationId: doc.conversationId,
+    platform: doc.platform as Platform,
+    nombre: doc.nombre,
+    apellido: doc.apellido,
+    telefonoCelular: doc.telefonoCelular,
+    created_at: doc.createdAt,
+  };
+}
+
+function docToAppointment(doc: any): Appointment {
+  return {
+    id: doc.$id,
+    customerId: doc.customerId ?? null,
+    conversationId: doc.conversationId,
+    tipoServicio: doc.tipoServicio,
+    fecha: doc.fecha,
+    hora: doc.hora,
+    notas: doc.notas ?? null,
+    status: (doc.status ?? "pending") as AppointmentStatus,
+    googleEventId: doc.googleEventId ?? null,
+    created_at: doc.createdAt,
   };
 }
 
@@ -482,6 +537,7 @@ export async function getBotSettings(): Promise<BotSettings | null> {
       offtopic_limit: doc.offtopic_limit ?? 3,
       escalation_agents: doc.escalation_agents || "[]",
       escalation_agent_index: doc.escalation_agent_index ?? 0,
+      scheduling_phrases: doc.scheduling_phrases || "[]",
     };
   } catch {
     return null;
@@ -500,6 +556,7 @@ export async function updateBotSettings(settings: Partial<BotSettings>): Promise
   if (settings.offtopic_limit !== undefined) data.offtopic_limit = settings.offtopic_limit;
   if (settings.escalation_agents !== undefined) data.escalation_agents = settings.escalation_agents;
   if (settings.escalation_agent_index !== undefined) data.escalation_agent_index = settings.escalation_agent_index;
+  if (settings.scheduling_phrases !== undefined) data.scheduling_phrases = settings.scheduling_phrases;
 
   try {
     await databases.updateDocument(DATABASE_ID, "bot_settings", SINGLETON_ID, data);
@@ -625,6 +682,100 @@ export async function createAuditLog(log: {
     ...log,
     createdAt: Math.floor(Date.now() / 1000),
   }).catch(() => {});
+}
+
+export async function updateConvState(
+  conversationId: string,
+  state: Record<string, any> | null
+): Promise<void> {
+  await databases.updateDocument(DATABASE_ID, COLLECTIONS.conversations, conversationId, {
+    conv_state: state ? JSON.stringify(state) : null,
+  });
+}
+
+export async function createCustomer(data: {
+  conversationId: string;
+  platform: Platform;
+  nombre: string;
+  apellido: string;
+  telefonoCelular: string;
+}): Promise<Customer> {
+  const doc = await databases.createDocument(
+    DATABASE_ID,
+    COLLECTIONS.customers,
+    ID.unique(),
+    { ...data, createdAt: Math.floor(Date.now() / 1000) }
+  );
+  return docToCustomer(doc);
+}
+
+export async function getCustomerByConversation(
+  conversationId: string
+): Promise<Customer | null> {
+  const result = await databases.listDocuments(DATABASE_ID, COLLECTIONS.customers, [
+    Query.equal("conversationId", conversationId),
+    Query.orderDesc("createdAt"),
+    Query.limit(1),
+  ]);
+  return result.documents.length > 0 ? docToCustomer(result.documents[0]) : null;
+}
+
+export async function createAppointment(data: {
+  customerId?: string;
+  conversationId: string;
+  tipoServicio: string;
+  fecha: string;
+  hora: string;
+  notas?: string;
+  googleEventId?: string;
+}): Promise<Appointment> {
+  const doc = await databases.createDocument(
+    DATABASE_ID,
+    COLLECTIONS.appointments,
+    ID.unique(),
+    {
+      customerId: data.customerId ?? null,
+      conversationId: data.conversationId,
+      tipoServicio: data.tipoServicio,
+      fecha: data.fecha,
+      hora: data.hora,
+      notas: data.notas ?? null,
+      status: "pending",
+      googleEventId: data.googleEventId ?? null,
+      createdAt: Math.floor(Date.now() / 1000),
+    }
+  );
+  return docToAppointment(doc);
+}
+
+export async function listAppointments(
+  status?: AppointmentStatus,
+  limit = 50
+): Promise<Appointment[]> {
+  const queries: any[] = [Query.orderDesc("createdAt"), Query.limit(limit)];
+  if (status) queries.push(Query.equal("status", status));
+  const result = await databases.listDocuments(DATABASE_ID, COLLECTIONS.appointments, queries);
+  return result.documents.map(docToAppointment);
+}
+
+export async function updateAppointmentStatus(
+  id: string,
+  status: AppointmentStatus
+): Promise<void> {
+  await databases.updateDocument(DATABASE_ID, COLLECTIONS.appointments, id, { status });
+}
+
+export async function checkSlotAvailability(
+  fecha: string,
+  hora: string
+): Promise<boolean> {
+  const result = await databases.listDocuments(DATABASE_ID, COLLECTIONS.appointments, [
+    Query.equal("fecha", fecha),
+    Query.equal("hora", hora),
+    Query.notEqual("status", "cancelled"),
+    Query.limit(1),
+  ]);
+  return result.documents.length === 0;
 }
 
 export async function getNextEscalationAgent(): Promise<string | null> {

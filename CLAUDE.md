@@ -81,6 +81,7 @@ El usuario **NO debe pedirte** que guardes los cambios. Hazlo siempre tú:
 - `scripts/migrate-audit-logs.ts` — crear colección audit_logs
 - `scripts/assign-roles.ts` — asignar roles a usuarios por email
 - `scripts/migrate-escalation-agents.ts` — agregar atributos de escalación round-robin a bot_settings
+- `scripts/setup-customers-appointments.ts` — crear colecciones customers y appointments + campo conv_state
 
 ### Sistema de Escalación Round-Robin
 - **Funcionalidad**: Distribuir notificaciones de escalación entre múltiples agentes en turno rotativo
@@ -99,3 +100,20 @@ El usuario **NO debe pedirte** que guardes los cambios. Hazlo siempre tú:
 - **Contexto completo**: El agente recibe qué necesita el cliente antes de entrar al dashboard
 - **Silencioso**: Si el LLM falla al resumir, el mensaje se envía igual sin resumen
 - **GROQ_API_KEY opcional**: El bot arranca sin ella; los audios se ignoran en lugar de crashear
+
+### Sistema CRM — Registro de Clientes y Citas (Mayo 2026)
+- **Trigger del flujo**: El bot detecta palabras clave como `agendar`, `cita`, `reservar` en el mensaje del usuario
+- **Flujo pregunta-respuesta**: nombre → apellido → teléfono celular → servicio → fecha → hora → notas → confirmación
+- **Estado del flujo**: Campo `conv_state` (JSON) en `conversations`. Se limpia a `null` al completar o cancelar
+- **Cancelar en cualquier momento**: el usuario puede escribir `cancelar` para abortar el flujo
+- **Nuevas colecciones**: `customers` (datos personales) y `appointments` (citas)
+- **Google Calendar**: opcional via Service Account. Vars: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_CALENDAR_ID`. Si no están, cita se guarda solo en Appwrite
+- **Dashboard**: `/appointments` — visible para Admin y Supervisor (`canViewAppointments`)
+- **Disponibilidad**: Si ya existe una cita con el mismo `fecha + hora` (status != cancelled), se rechaza y se pide otro horario
+- **Servicios disponibles** (hardcodeados en `conversation-state.ts`): Soporte técnico, Instalación de red, Desarrollo web, Cableado estructurado, Otro
+- **Gotcha**: `scheduling_phrases` en `bot_settings` es JSON array string igual que `escalation_phrases`. Si está vacío, usan los triggers por defecto
+- **Setup Google Calendar (una sola vez)**:
+  1. Google Cloud Console → habilitar Calendar API
+  2. Crear Service Account → descargar JSON
+  3. Copiar `client_email` y `private_key` al `.env`
+  4. En Google Calendar → Compartir con el email del Service Account → permiso "Realizar cambios en eventos"
