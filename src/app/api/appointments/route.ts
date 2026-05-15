@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { Client, Account } from "node-appwrite";
+import { Client, Users } from "node-appwrite";
 import {
   listAppointments,
   updateAppointmentStatus,
@@ -9,30 +9,29 @@ import {
 } from "@/lib/db";
 import { getUserRole, ROLE_PERMISSIONS } from "@/lib/roles";
 
-async function getAuthUser() {
+async function getAuthRole() {
   const cookieStore = await cookies();
-  const session = cookieStore.get("appwrite-session")?.value;
-  if (!session) return null;
+  const userId = cookieStore.get("appwrite-user-id")?.value;
+  if (!userId) return null;
 
   const client = new Client()
     .setEndpoint(process.env.APPWRITE_ENDPOINT!)
     .setProject(process.env.APPWRITE_PROJECT_ID!)
-    .setSession(session);
+    .setKey(process.env.APPWRITE_API_KEY!);
 
   try {
-    const account = new Account(client);
-    const user = await account.get();
-    const role = getUserRole(user.labels ?? []);
-    return { user, role };
+    const users = new Users(client);
+    const user = await users.get(userId);
+    return getUserRole(user.labels ?? []);
   } catch {
     return null;
   }
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await getAuthUser();
-  if (!auth) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-  if (!ROLE_PERMISSIONS[auth.role].canViewAuditLogs) {
+  const role = await getAuthRole();
+  if (!role) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  if (!ROLE_PERMISSIONS[role].canViewAppointments) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
   }
 
@@ -42,7 +41,6 @@ export async function GET(req: NextRequest) {
 
   const appointments = await listAppointments(status ?? undefined, limit);
 
-  // Enrich with customer names
   const enriched = await Promise.all(
     appointments.map(async (appt) => {
       const customer = await getCustomerByConversation(appt.conversationId).catch(() => null);
@@ -54,9 +52,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const auth = await getAuthUser();
-  if (!auth) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-  if (!ROLE_PERMISSIONS[auth.role].canViewAuditLogs) {
+  const role = await getAuthRole();
+  if (!role) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  if (!ROLE_PERMISSIONS[role].canViewAppointments) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
   }
 

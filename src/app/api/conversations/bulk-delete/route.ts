@@ -1,30 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { Client, Users } from "node-appwrite";
 import { deleteConversation, createAuditLog, getConversationById } from "@/lib/db";
-import { Client, Account } from "node-appwrite";
 import { getUserRole, ROLE_PERMISSIONS } from "@/lib/roles";
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
-  const session = cookieStore.get("appwrite-session")?.value;
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  const userId = cookieStore.get("appwrite-user-id")?.value;
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   const client = new Client()
     .setEndpoint(process.env.APPWRITE_ENDPOINT!)
     .setProject(process.env.APPWRITE_PROJECT_ID!)
-    .setSession(session);
+    .setKey(process.env.APPWRITE_API_KEY!);
 
-  let userId = "unknown";
   let userEmail: string | undefined;
 
   try {
-    const account = new Account(client);
-    const user = await account.get();
+    const users = new Users(client);
+    const user = await users.get(userId);
     const role = getUserRole(user.labels ?? []);
     if (!ROLE_PERMISSIONS[role].canDeleteConversation) {
       return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
     }
-    userId = user.$id;
     userEmail = user.email;
   } catch {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
