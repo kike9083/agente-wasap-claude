@@ -50,19 +50,30 @@ export function DashboardHeader({
   const router = useRouter();
   const [userName, setUserName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<UserRole>("operator");
+  const [loadingPermissions, setLoadingPermissions] = useState(true);
+  const [permissionsFailed, setPermissionsFailed] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const permissions = ROLE_PERMISSIONS[userRole];
 
   useEffect(() => {
     fetch("/api/auth/me")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`auth/me returned ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (data.user) {
           setUserName(data.user.name || data.user.email);
           setUserRole(data.user.role ?? "operator");
+        } else {
+          setPermissionsFailed(true);
         }
       })
-      .catch(console.error);
+      .catch((err) => {
+        console.error("auth/me failed:", err);
+        setPermissionsFailed(true);
+      })
+      .finally(() => setLoadingPermissions(false));
 
     if (typeof window !== "undefined" && Notification.permission === "granted") {
       registerPush().catch(console.error);
@@ -192,7 +203,23 @@ export function DashboardHeader({
             )}
 
             {/* Conectar/Desconectar Bot */}
-            {permissions.canDisconnectBot ? (
+            {loadingPermissions ? (
+              <div className="p-2 rounded-xl bg-gray-50 ring-1 ring-gray-100">
+                <div className="h-5 w-5 rounded-full border-2 border-gray-300 border-t-gray-500 animate-spin" />
+              </div>
+            ) : permissionsFailed && !isConnected ? (
+              <button
+                type="button"
+                onClick={onConnect}
+                disabled={loading}
+                className="p-2 md:px-4 md:py-2 rounded-xl bg-green-50 text-green-600 text-xs md:text-sm font-semibold hover:bg-green-100 ring-1 ring-green-100 transition-all animate-pulse"
+              >
+                <span className="hidden md:inline">Conectar Bot</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </button>
+            ) : permissions.canDisconnectBot ? (
               isConnected ? (
                 <button
                   type="button"
@@ -205,7 +232,19 @@ export function DashboardHeader({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                   </svg>
                 </button>
-              ) : null
+              ) : (
+                <button
+                  type="button"
+                  onClick={onConnect}
+                  disabled={loading}
+                  className="p-2 md:px-4 md:py-2 rounded-xl bg-green-50 text-green-600 text-xs md:text-sm font-semibold hover:bg-green-100 ring-1 ring-green-100 transition-all animate-pulse"
+                >
+                  <span className="hidden md:inline">Conectar Bot</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </button>
+              )
             ) : permissions.canConnectBot ? (
               !isConnected && (
                 <button

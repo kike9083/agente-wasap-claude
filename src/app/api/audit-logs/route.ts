@@ -35,7 +35,7 @@ export async function GET() {
     const response = await databases.listDocuments(
       DATABASE_ID,
       COLLECTIONS.audit_logs,
-      [Query.orderDesc("createdAt"), Query.limit(100)]
+      [Query.orderDesc("$createdAt"), Query.limit(100)]
     );
 
     return NextResponse.json({ logs: response.documents });
