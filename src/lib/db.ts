@@ -480,6 +480,20 @@ export async function notifyHostViaOutbox(
     } catch { /* si falla el resumen, continúa sin él */ }
   }
 
+  // Incluir datos del cliente del CRM si están disponibles
+  let customerText = "";
+  if (conversationId) {
+    try {
+      const customer = await getCustomerByConversation(conversationId);
+      if (customer) {
+        customerText =
+          `\n\n👤 Datos del cliente (CRM):\n` +
+          `• Nombre: ${customer.nombre} ${customer.apellido}\n` +
+          `• Tel: ${customer.telefonoCelular}`;
+      }
+    } catch {}
+  }
+
   const labels: Record<string, string> = { telegram: "Telegram", webchat: "WebChat", instagram: "Instagram", facebook: "Facebook" };
   const label = labels[platform] ?? platform;
   const dashboardUrl = process.env.DASHBOARD_URL || "https://varios-agente-wasap-omni.fjueze.easypanel.host";
@@ -487,7 +501,7 @@ export async function notifyHostViaOutbox(
   await enqueueOutbox(
     conversation.id,
     hostPhone,
-    `[TechPadah] Atencion requerida\n\nCanal: ${label}\nCliente: ${clientName}\nUltimo mensaje: "${lastMsg.slice(0, 200)}"${summaryText}\n\nResponde desde el dashboard:\n${dashboardUrl}`
+    `[TechPadah] Atencion requerida\n\nCanal: ${label}\nCliente: ${clientName}\nUltimo mensaje: "${lastMsg.slice(0, 200)}"${customerText}${summaryText}\n\nResponde desde el dashboard:\n${dashboardUrl}`
   );
   console.log(`[notifyHostViaOutbox] Notificación encolada → ${hostPhone} (canal: ${label}, cliente: ${clientName})`);
 }

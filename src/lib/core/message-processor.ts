@@ -1,6 +1,7 @@
 import {
   insertMessage,
   getConversationById,
+  getCustomerByConversation,
   getRecentHistory,
   setMode,
   notifyHostViaOutbox,
@@ -11,7 +12,7 @@ import {
 import { generateReply } from "../openrouter";
 import { getActiveSettings } from "../system-prompt";
 import { sendPushToAll } from "../push";
-import { handleConvState, isSchedulingTrigger, startRegistrationFlow } from "./conversation-state";
+import { handleConvState, isSchedulingTrigger, startRegistrationFlow, startPreEscalationFlow } from "./conversation-state";
 
 export interface ProcessMessageInput {
   platform: Platform;
@@ -60,10 +61,27 @@ export async function processMessage(
     return { replied: false, wasEscalation: false, wasWelcome: false };
   }
 
-  // ── Flujo de registro y agendamiento ────────────────────────────────────
+  // ── Flujo de registro y agendamiento / pre-escalación ───────────────────
   if (fresh.conv_state) {
-    const consumed = await handleConvState(fresh, text, sendReply);
-    if (consumed) return { replied: true, wasEscalation: false, wasWelcome: false };
+    const result = await handleConvState(fresh, text, sendReply);
+    if (result === "escalate") {
+      // Pre-escalación completada: escalar ahora con datos del cliente en CRM
+      await setMode(conversationId, "HUMAN");
+      await resetOfftopicCount(conversationId);
+      await onEscalation?.(name, text);
+      if (platform !== "whatsapp") {
+        await notifyHostViaOutbox(platform, name, text, conversationId).catch((err) => {
+          console.error("[message-processor] Error encolando notificación al host:", err);
+        });
+      }
+      await sendPushToAll({
+        title: "Atencion requerida",
+        body: `${name} (${platform}): "${text.slice(0, 100)}"`,
+        url: "/",
+      }).catch(() => {});
+      return { replied: true, wasEscalation: true, wasWelcome: false };
+    }
+    if (result) return { replied: true, wasEscalation: false, wasWelcome: false };
   } else if (isSchedulingTrigger(text, settings.scheduling_phrases)) {
     await startRegistrationFlow(conversationId, sendReply);
     return { replied: true, wasEscalation: false, wasWelcome: false };
@@ -103,6 +121,13 @@ export async function processMessage(
   const didEscalate = wasEscalation || forceEscalation;
 
   if (didEscalate) {
+    // Si el cliente no está registrado en CRM, capturar sus datos antes de escalar
+    const existingCustomer = await getCustomerByConversation(conversationId).catch(() => null);
+    if (!existingCustomer) {
+      await startPreEscalationFlow(conversationId, sendReply);
+      return { replied: true, wasEscalation: false, wasWelcome: false };
+    }
+    // Cliente ya registrado — escalar directamente (notifyHost incluirá sus datos del CRM)
     await setMode(conversationId, "HUMAN");
     await resetOfftopicCount(conversationId);
     await onEscalation?.(name, text);

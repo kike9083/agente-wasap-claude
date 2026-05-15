@@ -68,11 +68,22 @@ export async function startRegistrationFlow(
   );
 }
 
+export async function startPreEscalationFlow(
+  conversationId: string,
+  sendReply: (msg: string) => Promise<void>
+): Promise<void> {
+  const state: ConvState = { step: "pre_esc_nombre", data: {} };
+  await updateConvState(conversationId, state);
+  await sendReply(
+    "Antes de conectarte con un asesor, necesito algunos datos para atenderte mejor. ¿Cuál es tu nombre?"
+  );
+}
+
 export async function handleConvState(
   conv: Conversation,
   userText: string,
   sendReply: (msg: string) => Promise<void>
-): Promise<boolean> {
+): Promise<boolean | "escalate"> {
   if (!conv.conv_state) return false;
 
   let state: ConvState;
@@ -234,6 +245,34 @@ export async function handleConvState(
           "Un asesor de TechPadah se comunicará contigo para confirmar los detalles. ¡Gracias!"
       );
       return true;
+    }
+
+    case "pre_esc_nombre":
+      state.data.nombre = text;
+      state.step = "pre_esc_apellido";
+      await updateConvState(conv.id, state);
+      await sendReply(`Gracias ${text}. ¿Cuál es tu apellido?`);
+      return true;
+
+    case "pre_esc_apellido":
+      state.data.apellido = text;
+      state.step = "pre_esc_telefono";
+      await updateConvState(conv.id, state);
+      await sendReply("¿Cuál es tu número de teléfono celular?");
+      return true;
+
+    case "pre_esc_telefono": {
+      state.data.telefonoCelular = text;
+      await createCustomer({
+        conversationId: conv.id,
+        platform: conv.platform,
+        nombre: state.data.nombre,
+        apellido: state.data.apellido,
+        telefonoCelular: text,
+      });
+      await updateConvState(conv.id, null);
+      await sendReply("Perfecto, gracias. En un momento un asesor de TechPadah te atenderá.");
+      return "escalate";
     }
   }
 

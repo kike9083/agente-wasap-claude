@@ -55,12 +55,28 @@ async function notifyHost(
     } catch { /* si falla el resumen, continúa sin él */ }
   }
 
+  // Incluir datos del cliente del CRM si están disponibles
+  let customerText = "";
+  if (conversationId) {
+    try {
+      const { getCustomerByConversation } = await import("../db");
+      const customer = await getCustomerByConversation(conversationId);
+      if (customer) {
+        customerText =
+          `\n\n👤 Datos del cliente (CRM):\n` +
+          `• Nombre: ${customer.nombre} ${customer.apellido}\n` +
+          `• Tel: ${customer.telefonoCelular}`;
+      }
+    } catch {}
+  }
+
   const dashboardUrl = process.env.DASHBOARD_URL || "https://varios-agente-wasap-omni.fjueze.easypanel.host";
   const text =
     `[TechPadah] Atencion requerida\n\n` +
     `Cliente: ${clientName}\n` +
     `Numero: ${phoneLabel}\n` +
     `Ultimo mensaje: "${lastMessage}"` +
+    `${customerText}` +
     `${summaryText}\n\n` +
     `Responde desde el dashboard:\n${dashboardUrl}`;
 
